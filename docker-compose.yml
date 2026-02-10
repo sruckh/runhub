@@ -1,0 +1,15 @@
+services:
+  rhub-interface:
+    build: .
+    container_name: rhub-interface
+    restart: unless-stopped
+    networks:
+      - shared_net
+    volumes:
+      - ./outputs:/mount
+    # Port 3000 is exposed within shared_net for Nginx Proxy Manager
+    # No ports are mapped to localhost per your requirement
+
+networks:
+  shared_net:
+    external: true
