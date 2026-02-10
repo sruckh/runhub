@@ -1,0 +1,49 @@
+%% Request flow - iMontage RunningHub - 2026-02-10
+sequenceDiagram
+    participant U as Browser
+    participant P as +page.svelte
+    participant G as /api/generate
+    participant C as /api/check
+    participant I as /api/images
+    participant Gem as Gemini API
+    participant RH as RunningHub API
+    participant FS as /mount Volume
+
+    U->>P: Fill form and click Start
+    loop For each prompt (1..N)
+        P->>G: POST loraUrl, subject, ratio, keys
+        G->>G: Pick random scenario
+        G->>Gem: Generate FLUX prompt
+        Gem-->>G: Prompt text
+        G->>G: Calculate 16px-aligned dims
+        G->>RH: Submit image task
+        RH-->>G: taskId
+        G-->>P: taskId + prompt
+
+        loop Poll every 5s
+            P->>C: POST taskId, rhubKey, dir, prefix
+            C->>RH: Query task status
+            alt PROCESSING
+                RH-->>C: status: PROCESSING
+                C-->>P: PROCESSING
+            else SUCCESS
+                RH-->>C: status: SUCCESS + imageUrl
+                C->>RH: Download image
+                RH-->>C: Image bytes
+                C->>FS: Save prefix_NNN.png
+                C-->>P: SUCCESS + filename
+            else FAILED
+                RH-->>C: status: FAILED
+                C-->>P: FAILED + error
+            end
+        end
+
+        P->>I: GET /api/images/dir/file.png
+        I->>FS: Read file
+        FS-->>I: File bytes
+        I-->>P: Image response
+        P->>U: Display thumbnail + prompt
+    end
+
+    U->>P: Click image thumbnail
+    P->>U: Open fullscreen modal

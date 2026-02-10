@@ -1,0 +1,41 @@
+%% Architecture overview - iMontage RunningHub - 2026-02-10
+flowchart TD
+    classDef default fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b
+    classDef external fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#bf360c
+    classDef storage fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
+    classDef infra fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c
+    classDef client fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
+
+    subgraph docker["Docker Container - shared_net"]
+        direction TB
+        subgraph sveltekit["SvelteKit App :3000"]
+            direction TB
+            page["Page UI<br/>+page.svelte"]
+            sw["Service Worker<br/>PWA Cache"]
+            apiGen["POST /api/generate"]
+            apiCheck["POST /api/check"]
+            apiImg["GET /api/images/*"]
+        end
+        vol[("/mount Volume")]:::storage
+    end
+
+    browser(["Browser Client"]):::client
+    proxy["Reverse Proxy<br/>Nginx Proxy Manager"]:::infra
+    gemini["Google Gemini<br/>gemini-3-pro"]:::external
+    rhub["RunningHub API<br/>FLUX.1-dev + LoRA"]:::external
+    host["Host: ./outputs"]:::storage
+
+    browser --> proxy
+    proxy --> page
+    page --> apiGen
+    page --> apiCheck
+    page --> apiImg
+    page -.-> sw
+
+    apiGen -->|"Prompt request"| gemini
+    apiGen -->|"Submit task"| rhub
+    apiCheck -->|"Poll status"| rhub
+    apiCheck -->|"Download image"| rhub
+    apiCheck -->|"Save file"| vol
+    apiImg -->|"Read file"| vol
+    vol ---|"bind mount"| host

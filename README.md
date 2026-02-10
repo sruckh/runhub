@@ -17,13 +17,13 @@ A self-hosted SvelteKit web application that automates high-quality image genera
 
 ## Architecture
 
-![Architecture Diagram](./docs/diagrams/architecture.svg)
+![Architecture Overview](./docs/diagrams/architecture-overview.svg)
 
 The application runs as a single SvelteKit container with three server-side API routes. The frontend communicates with two external APIs — Google Gemini for prompt generation and RunningHub for image synthesis — while serving generated images from a Docker-mounted volume.
 
-## Data Flow
+## Request Flow
 
-![Data Flow Diagram](./docs/diagrams/data-flow.svg)
+![Request Flow](./docs/diagrams/architecture-request-flow.svg)
 
 1. User provides subject characteristics, LoRA URL, and API keys
 2. A random photographic scenario is selected from 10 curated options
