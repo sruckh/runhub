@@ -1,0 +1,41 @@
+%% Architecture diagram for iMontage RunningHub — 2026-02-10
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e1f5fe', 'primaryTextColor': '#01579b', 'primaryBorderColor': '#0288d1', 'lineColor': '#0288d1', 'secondaryColor': '#fff3e0', 'tertiaryColor': '#e8f5e9', 'fontFamily': 'arial', 'fontSize': '14px' }, 'flowchart': { 'htmlLabels': true, 'curve': 'basis', 'rankSpacing': 50, 'nodeSpacing': 30, 'padding': 15, 'useMaxWidth': true }, 'themeCSS': '.node rect { rx: 4; ry: 4; }' }}%%
+flowchart TD
+    classDef default fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b
+    classDef external fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#e65100
+    classDef storage fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
+    classDef frontend fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c
+
+    user(["Browser Client"]):::frontend
+
+    subgraph docker ["Docker Container — port 3000"]
+        subgraph sveltekit ["SvelteKit Server (adapter-node)"]
+            page["Svelte 5 UI<br/>+page.svelte"]:::frontend
+            api_gen["POST /api/generate"]
+            api_check["POST /api/check"]
+            api_img["GET /api/images/*"]
+        end
+    end
+
+    subgraph ext ["External APIs"]
+        gemini["Google Gemini<br/>gemini-3-pro"]:::external
+        rhub_run["RunningHub<br/>Run Endpoint"]:::external
+        rhub_query["RunningHub<br/>Query Endpoint"]:::external
+        rhub_cdn["RunningHub CDN<br/>Image Download"]:::external
+    end
+
+    volume[("/mount Volume<br/>./outputs")]:::storage
+
+    user -->|"HTTP"| page
+    page -->|"fetch"| api_gen
+    page -->|"poll 5s"| api_check
+    page -->|"img src"| api_img
+
+    api_gen -->|"Prompt request"| gemini
+    api_gen -->|"Submit job"| rhub_run
+
+    api_check -->|"Task status"| rhub_query
+    api_check -->|"Download image"| rhub_cdn
+    api_check -->|"Save file"| volume
+
+    api_img -->|"Read file"| volume

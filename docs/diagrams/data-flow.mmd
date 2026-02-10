@@ -1,0 +1,45 @@
+%% Data flow diagram for iMontage RunningHub — 2026-02-10
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e1f5fe', 'primaryTextColor': '#01579b', 'primaryBorderColor': '#0288d1', 'lineColor': '#0288d1', 'secondaryColor': '#fff3e0', 'tertiaryColor': '#e8f5e9', 'fontFamily': 'arial', 'fontSize': '14px' }, 'sequence': { 'diagramMarginX': 30, 'diagramMarginY': 20, 'actorMargin': 50, 'width': 150, 'height': 40, 'boxMargin': 10, 'boxTextMargin': 5, 'noteMargin': 10, 'messageMargin': 35 }, 'themeCSS': '.node rect { rx: 4; ry: 4; }' }}%%
+sequenceDiagram
+    actor User
+    participant UI as Svelte 5 UI
+    participant Gen as /api/generate
+    participant Gemini as Google Gemini
+    participant RH as RunningHub
+    participant Check as /api/check
+    participant Vol as /mount Volume
+    participant Img as /api/images
+
+    User->>UI: Enter config + click Start
+    loop For each prompt (1..N)
+        UI->>Gen: POST {subject, loraUrl, AR, keys}
+        Note right of Gen: Pick random scenario
+        Gen->>Gemini: Generate FLUX.1-dev prompt
+        Gemini-->>Gen: PROMPT: detailed text
+        Note right of Gen: Calculate dimensions<br/>from aspect ratio
+        Gen->>RH: Submit job (prompt, LoRA,<br/>dims, random seed)
+        RH-->>Gen: taskId
+        Gen-->>UI: {taskId, prompt}
+        loop Poll every 5 seconds
+            UI->>Check: POST {taskId, rhubKey,<br/>outputDir, prefix}
+            Check->>RH: Query task status
+            RH-->>Check: status + result URL
+            alt SUCCESS
+                Check->>RH: Download image
+                RH-->>Check: Image bytes
+                Check->>Vol: Save as prefix_NNN.png
+                Check-->>UI: {SUCCESS, filename}
+                UI->>Img: GET /api/images/dir/file
+                Img->>Vol: Read file
+                Vol-->>Img: File bytes
+                Img-->>UI: Image response
+                UI-->>User: Display thumbnail + prompt
+            else PROCESSING
+                Check-->>UI: {PROCESSING}
+                Note over UI: Wait 5s, retry
+            else FAILED
+                Check-->>UI: {FAILED, error}
+                UI-->>User: Show error badge
+            end
+        end
+    end
