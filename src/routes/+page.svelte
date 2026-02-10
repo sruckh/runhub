@@ -188,12 +188,12 @@
 
         <div class="actions">
             {#if !loading}
-                <button class="btn-primary" on:click={handleSubmit}>Start Generation</button>
+                <button class="btn-primary" onclick={handleSubmit}>Start Generation</button>
                 {#if results.length > 0}
-                    <button class="btn-secondary" on:click={clearQueue}>Clear Results</button>
+                    <button class="btn-secondary" onclick={clearQueue}>Clear Results</button>
                 {/if}
             {:else}
-                <button class="btn-danger" on:click={handleCancel}>Cancel Batch</button>
+                <button class="btn-danger" onclick={handleCancel}>Cancel Batch</button>
             {/if}
         </div>
     </div>

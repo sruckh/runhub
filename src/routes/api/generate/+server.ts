@@ -15,35 +15,41 @@ export const POST: RequestHandler = async ({ request }) => {
         return json({ error: 'API Keys are required' }, { status: 400 });
     }
 
+    const scenarios = [
+        "A sun-drenched Mediterranean balcony overlooking a turquoise ocean, light linen clothing, breakfast setting.",
+        "A high-end modern art gallery with minimalist white walls, wearing sophisticated avant-garde tailoring, soft gallery spotlighting.",
+        "A rugged mountain hiking trail at golden hour, wearing technical outdoor gear, vast valley view in the background.",
+        "A rainy afternoon inside a cozy, plant-filled greenhouse or conservatory, wearing a soft wool cardigan and jeans.",
+        "A professional high-rise office at blue hour, city lights through floor-to-ceiling glass, wearing a sharp business suit.",
+        "A vibrant local farmer's market in a rustic village, holding a basket of fresh produce, wearing a sundress and sunhat.",
+        "A gritty industrial workshop or garage, natural light through dusty windows, wearing stained denim overalls.",
+        "A snowy luxury ski resort lounge, sitting by a roaring stone fireplace, wearing a heavy cable-knit sweater and winter boots.",
+        "A sun-bleached desert landscape at dusk, wearing bohemian desert attire, long shadows and warm orange lighting.",
+        "A sleek, futuristic underground subway station, clean lines and cool fluorescent lighting, wearing techwear-inspired street fashion."
+    ];
+
+    const randomScenario = scenarios[Math.floor(Math.random() * scenarios.length)];
+
     try {
         const genAI = new GoogleGenerativeAI(geminiKey);
-        // Use temperature 1.0+ for higher randomness/variety
         const model = genAI.getGenerativeModel({ 
             model: "gemini-3-pro-preview",
-            generationConfig: {
-                temperature: 1.2,
-                topP: 0.95,
-            }
+            generationConfig: { temperature: 1.3, topP: 0.95 }
         });
 
-        const systemPrompt = `You are an expert FLUX.1‑dev prompt engineer. Your task is to generate a single, high-fidelity prompt for a character LoRA that looks like a high-quality social media post or professional photograph.
+        const systemPrompt = `You are an expert FLUX.1‑dev prompt engineer.
+Your task is to generate a single, high-fidelity prompt for a character LoRA that looks like a high-quality social media post or professional photograph.
 
-STRICT REALISM & VARIETY PROTOCOL:
-1. Every prompt must depict a scene that could actually exist in the real world. NO fantasy, NO sci-fi, NO surrealism.
-2. Focus on "Social Media Realism": Think Instagram, TikTok, Pinterest, or Travel Photography.
-3. REAL-WORLD ANCHORING: For every request, randomly choose a distinct realistic 'anchor': [Candid Urban Street, Cozy Modern Interior, Luxury Travel Destination, Moody Nightlife/Cityscape, Outdoor Fitness/Adventure, High-Fashion Streetwear, Seasonal Nature (Autumn woods/Beach/Snow), or Chic Cafe/Restaurant].
-4. VARY EVERYTHING: Change the time of day, weather, camera angle (candid, selfie-style, professional portrait), and clothing style while staying true to the subject's characteristics.
+STRICT UNIQUENESS PROTOCOL:
+1. You MUST use the SPECIFIC SCENARIO provided in the user prompt as the exclusive setting.
+2. EXPLICITLY FORBIDDEN: Do not use "leather jackets", "neon lights", "nightclubs", "flash photography", or "brick walls" in this generation. 
+3. Focus on authentic, diverse everyday realism.
+4. Output format: PROMPT: <single detailed prompt here>`;
 
-DO NOT USE PLACEHOLDERS: Never use "[TRIGGER]", "[CHARACTER]", or "trigger".
-
-1. Overall goals: Maximize character fidelity, natural language, 25-60 words.
-3. Modular structure: Character identity, Subject + action, Environment / context, Lighting & mood, Style & technical modifiers.
-7. Output format: PROMPT: <single detailed prompt here>`;
-
-        console.log('Generating realistic unique prompt with Social Media Anchoring...');
+        console.log('Generating unique prompt with Scenario:', randomScenario);
         const geminiResult = await model.generateContent([
             { text: systemPrompt },
-            { text: `Subject Characteristics: ${subject}\n\nTASK: Generate a prompt for a REALISTIC, grounded, and visually interesting scene. Avoid cliches like "standing in a park" or "drinking coffee" unless the composition is unique. Focus on authentic textures and lighting.` }
+            { text: `Subject Characteristics: ${subject}\nREQUIRED SCENARIO: ${randomScenario}\n\nTASK: Create a unique, detailed prompt. Focus on textures, specific clothing items (not leather), and natural lighting.` }
         ]);
         const responseText = geminiResult.response.text();
         const promptMatch = responseText.match(/PROMPT:\s*(.*)/i);
@@ -64,25 +70,14 @@ DO NOT USE PLACEHOLDERS: Never use "[TRIGGER]", "[CHARACTER]", or "trigger".
             usePersonalQueue: "false"
         };
 
-        console.log('--- RunningHub Submission Data ---');
-        console.log('URL: https://www.runninghub.ai/openapi/v2/run/ai-app/1982245789865000962');
-        console.log('Payload:', JSON.stringify(rhubPayload, null, 2));
-
         const rhubResponse = await fetch('https://www.runninghub.ai/openapi/v2/run/ai-app/1982245789865000962', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${rhubKey}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${rhubKey}` },
             body: JSON.stringify(rhubPayload)
         });
 
         const submitData = await rhubResponse.json();
-        console.log('RunningHub Raw Response:', JSON.stringify(submitData, null, 2));
-        
-        if (!submitData.taskId) {
-            throw new Error(`RunningHub submission failed: ${submitData.errorMessage || JSON.stringify(submitData)}`);
-        }
+        if (!submitData.taskId) throw new Error(`RunningHub submission failed: ${JSON.stringify(submitData)}`);
 
         return json({ taskId: submitData.taskId, prompt: finalPrompt });
 
