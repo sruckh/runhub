@@ -6,7 +6,7 @@ A self-hosted SvelteKit web application that automates high-quality image genera
 
 ## Features
 
-- **AI Prompt Engineering** — Google Gemini generates unique, detailed FLUX.1-dev prompts from 10 curated photographic scenarios, avoiding repetitive outputs
+- **AI Prompt Engineering** — Google Gemini generates unique, detailed FLUX.1-dev prompts from 100 curated photographic scenarios, avoiding repetitive outputs
 - **Batch Generation** — Queue up to 50 sequential image generations with a single click
 - **LoRA Support** — Point to any custom LoRA model URL for character-consistent output
 - **Flexible Aspect Ratios** — 9 presets (1:1, 16:9, 9:16, 3:2, etc.) with automatic 16px-aligned dimension calculation
@@ -26,7 +26,7 @@ The application runs as a single SvelteKit container with three server-side API 
 ![Data Flow Diagram](./docs/diagrams/data-flow.svg)
 
 1. User provides subject characteristics, LoRA URL, and API keys
-2. A random photographic scenario is selected from 10 curated options
+2. A random photographic scenario is selected from 100 curated options
 3. Gemini generates a detailed FLUX.1-dev prompt combining the subject and scenario
 4. Image dimensions are calculated from the chosen aspect ratio (16px-aligned)
 5. The prompt, LoRA, dimensions, and a random seed are submitted to RunningHub
