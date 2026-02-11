@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { RUNPOD_API_KEY } from '$env/static/private';
+import { GoogleGenAI } from '@google/genai';
+import { getNextLocation } from '$lib/locations';
 
 export const POST: RequestHandler = async ({ request }) => {
     const {
@@ -11,10 +11,12 @@ export const POST: RequestHandler = async ({ request }) => {
         geminiKey,
         rhubKey,
         runpodKey: userRunpodKey,
-        promptProvider = 'gemini'
+        promptProvider = 'gemini',
+        useTtDecoder = false
     } = await request.json();
 
-    const runpodKey = userRunpodKey || RUNPOD_API_KEY;
+    // Use user-provided RunPod key (no fallback to env var)
+    const runpodKey = userRunpodKey;
 
     if (promptProvider === 'gemini' && !geminiKey) {
         return json({ error: 'Gemini API Key is required' }, { status: 400 });
@@ -32,13 +34,16 @@ export const POST: RequestHandler = async ({ request }) => {
         // Helper for AI calls
         async function askAI(system: string, user: string, temperature = 1.0) {
             if (promptProvider === 'gemini') {
-                const genAI = new GoogleGenerativeAI(geminiKey);
-                const model = genAI.getGenerativeModel({ 
-                    model: "gemini-1.5-flash",
-                    generationConfig: { temperature }
+                const ai = new GoogleGenAI({ apiKey: geminiKey });
+                const response = await ai.models.generateContent({
+                    model: 'gemini-3-flash-preview',
+                    contents: user,
+                    config: {
+                        systemInstruction: system,
+                        temperature
+                    }
                 });
-                const result = await model.generateContent([{ text: system }, { text: user }]);
-                return result.response.text().trim();
+                return (response.text || '').trim();
             } else {
                 const runpodPayload = {
                     input: {
@@ -61,40 +66,42 @@ export const POST: RequestHandler = async ({ request }) => {
             }
         }
 
-        // STEP 1: Choose a Location
-        console.log('Step 1: Choosing Location...');
-        const locationPrompt = await askAI(
-            "You are a travel scout. Pick a specific, visually stunning, and unique location in the world that would make an incredible social media photograph. Be specific (e.g., 'A hidden blue-water cenote in Tulum' instead of just 'Mexico').",
-            "Pick one random, high-vibe location. Output ONLY the location name and a 5-word description.",
-            1.5 // High temperature for variety
-        );
+        // STEP 1: Pick location from curated pool (true randomness, no AI bias)
+        const location = getNextLocation();
+        console.log('Step 1: Location (from pool):', location);
 
-        // STEP 2: Choose Composition/Activity
-        console.log('Step 2: Choosing Composition for Location:', locationPrompt);
+        // STEP 2: AI designs composition for this location + subject
+        console.log('Step 2: Choosing Composition...');
         const compositionPrompt = await askAI(
-            `You are a professional photographer. Given a location and a subject, describe a compelling composition, lighting setup, and activity. 
-            Avoid cliches like "standing and smiling". Think about movement, candidness, and cinematic angles.
-            Location: ${locationPrompt}
-            Subject: ${subject}`,
-            "Describe the scene's composition, the subject's activity, and the lighting in 2-3 sentences.",
-            1.2
+            `You are a professional photographer planning a social media shoot.
+Given a specific location and subject, describe a compelling composition, lighting, and activity.
+Rules:
+- Avoid cliches: no "standing and smiling", no "looking at camera", no "posing".
+- Think about movement, candidness, cinematic angles, and storytelling.
+- Describe specific clothing that fits the location and mood.
+- Include time of day and lighting quality.
+Location: ${location}
+Subject: ${subject}`,
+            "Describe the scene in 2-3 vivid sentences: composition, activity, clothing, and lighting.",
+            1.3
         );
 
-        // STEP 3: Generate Final FLUX Prompt
-        console.log('Step 3: Generating Final FLUX Prompt...');
-        const finalSystemPrompt = `You are an expert FLUX.1‑dev prompt engineer.
-Your task is to generate a single, high-fidelity prompt for a character LoRA that looks like a high-quality social media post or professional photograph.
+        // STEP 3: Generate final FLUX prompt
+        console.log('Step 3: Generating FLUX Prompt...');
+        const finalSystemPrompt = `You are an expert FLUX.1-dev prompt engineer.
+Generate a single, detailed prompt for a character LoRA photograph that looks like a real social media post.
 
-STRICT UNIQUENESS PROTOCOL:
-1. You MUST use the LOCATION and COMPOSITION provided.
-2. EXPLICITLY FORBIDDEN: Do not use "leather jackets", "neon lights", "nightclubs", "flash photography", or "brick walls". 
-3. Focus on authentic, diverse everyday realism.
-4. Output format: PROMPT: <single detailed prompt here>`;
+RULES:
+1. You MUST incorporate the LOCATION and COMPOSITION provided — do not change them.
+2. FORBIDDEN: "leather jacket", "neon lights", "nightclub", "flash photography", "brick wall", "bokeh".
+3. Focus on authentic everyday realism: natural textures, real fabrics, ambient lighting.
+4. Include specific details: fabric types, colors, accessories, environment textures.
+5. Output format: PROMPT: <single detailed prompt here>`;
 
-        const finalUserMessage = `Subject: ${subject}\nLocation: ${locationPrompt}\nComposition & Vibe: ${compositionPrompt}\n\nTASK: Create a unique, detailed prompt. Focus on textures, specific clothing items, and natural lighting.`;
+        const finalUserMessage = `Subject: ${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate one detailed, unique FLUX prompt.`;
 
         const responseText = await askAI(finalSystemPrompt, finalUserMessage, 1.0);
-        const promptMatch = responseText.match(/PROMPT:\s*(.*)/i);
+        const promptMatch = responseText.match(/PROMPT:\s*(.*)/is);
         finalPrompt = promptMatch ? promptMatch[1].trim() : responseText.trim();
 
         const { width, height } = calculateDimensions(aspectRatio);
@@ -112,7 +119,8 @@ STRICT UNIQUENESS PROTOCOL:
             usePersonalQueue: "false"
         };
 
-        const rhubResponse = await fetch('https://www.runninghub.ai/openapi/v2/run/ai-app/1982245789865000962', {
+        const workflowId = useTtDecoder ? '1982245789865000962' : '2021692093294452738';
+        const rhubResponse = await fetch(`https://www.runninghub.ai/openapi/v2/run/ai-app/${workflowId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${rhubKey}` },
             body: JSON.stringify(rhubPayload)

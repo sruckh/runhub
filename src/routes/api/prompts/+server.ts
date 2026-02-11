@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 export const POST: RequestHandler = async ({ request }) => {
     try {
@@ -20,22 +20,19 @@ export const POST: RequestHandler = async ({ request }) => {
                 return json({ error: 'Gemini API Key is required' }, { status: 400 });
             }
 
-            const genAI = new GoogleGenerativeAI(geminiKey);
-            const model = genAI.getGenerativeModel({ 
-                model: "gemini-2.0-flash", // Using a stable modern model
-                generationConfig: { temperature: 1.0 }
-            });
-
-            const systemPrompt = `You are an expert image prompt engineer. 
+            const ai = new GoogleGenAI({ apiKey: geminiKey });
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: `Subject: ${subject}\n\nGenerate a single detailed prompt.`,
+                config: {
+                    systemInstruction: `You are an expert image prompt engineer.
 Your task is to generate a single, high-fidelity prompt for an image generation model (like FLUX or Midjourney).
 The prompt should be descriptive, focusing on lighting, composition, style, and detail.
-
-Subject: ${subject}
-
-Output ONLY the prompt text, nothing else.`;
-
-            const result = await model.generateContent(systemPrompt);
-            const responseText = result.response.text();
+Output ONLY the prompt text, nothing else.`,
+                    temperature: 1.0
+                }
+            });
+            const responseText = response.text || '';
             
             return json({ prompt: responseText.trim() });
 

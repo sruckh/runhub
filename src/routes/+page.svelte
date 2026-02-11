@@ -11,13 +11,30 @@
     let rhubKey = $state('');
     let runpodKey = $state('');
     let promptProvider = $state('gemini');
+    // Load persisted TT-Decoder setting from localStorage
+    const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
+    let useTtDecoder = $state(savedTtDecoder);  // TT-Decoder toggle
     let loading = $state(false);
+
+    // Persist setting changes
+    $effect(() => {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('useTtDecoder', String(useTtDecoder));
+        }
+    });
     let results = $state<any[]>([]);
     let error = $state('');
     
     // New states
     let isCancelled = $state(false);
     let selectedImage = $state<string | null>(null);
+    let toastMessage = $state('');
+
+    // Show toast notification
+    function showToast(msg: string) {
+        toastMessage = msg;
+        setTimeout(() => toastMessage = '', 3000);
+    }
 
     onMount(() => {
         console.log('iMontage Interface Mounted');
@@ -37,7 +54,8 @@
             geminiKey,
             rhubKey,
             runpodKey,
-            promptProvider
+            promptProvider,
+            useTtDecoder
         };
 
         for (let i = 0; i < numPrompts; i++) {
@@ -88,12 +106,13 @@
                 const response = await fetch('/api/check', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ taskId, rhubKey, outputDir, prefix })
+                    body: JSON.stringify({ taskId, rhubKey, outputDir, prefix, useTtDecoder })
                 });
                 const data = await response.json();
 
                 if (data.status === 'SUCCESS') {
-                    updateResult(resultId, { status: 'SUCCESS', filename: data.filename });
+                    updateResult(resultId, { status: 'SUCCESS', filename: data.filename, resultInfo: data.resultInfo, ts: Date.now() });
+
                     break;
                 } else if (data.status === 'FAILED') {
                     updateResult(resultId, { status: 'FAILED', error: data.error });
@@ -113,6 +132,16 @@
 
     function updateResult(id: string, updates: any) {
         results = results.map(r => r.id === id ? { ...r, ...updates } : r);
+
+        // Show toast for decode result
+        if (updates.status === 'SUCCESS' && updates.resultInfo) {
+            const { decoded, extension } = updates.resultInfo;
+            if (decoded) {
+                showToast(`✓ Decoded: ${extension.toUpperCase()} file`);
+            } else {
+                showToast('ℹ Original image saved (no hidden data)');
+            }
+        }
     }
 
     function openFullScreen(url: string) {
@@ -166,6 +195,16 @@
 
         <section class="lora-settings">
             <h2>Generation Settings</h2>
+
+            <!-- TT-Decoder Toggle -->
+            <div class="field toggle-field">
+                <label for="useTtDecoder" class="toggle-label">
+                    <span class="toggle-text">Enable TT-Decoder</span>
+                    <input type="checkbox" id="useTtDecoder" bind:checked={useTtDecoder} class="toggle-checkbox" />
+                    <span class="toggle-slider"></span>
+                </label>
+                <p class="toggle-description">Decode hidden files from returned images (LSB steganography)</p>
+            </div>
             <div class="field">
                 <label for="loraUrl">LoRA URL</label>
                 <input type="text" id="loraUrl" bind:value={loraUrl} placeholder="https://..." />
@@ -219,6 +258,12 @@
         <div class="error-box">{error}</div>
     {/if}
 
+    <!-- Toast Notification -->
+    {#if toastMessage}
+        <div class="toast">{toastMessage}</div>
+    {/if}
+
+
     {#if results.length > 0}
         <section class="results">
             <h2>Live Results {#if loading}<span class="loader-dots">...</span>{/if}</h2>
@@ -235,10 +280,22 @@
                         <div class="result-content">
                             <div class="image-preview">
                                 {#if res.status === 'SUCCESS'}
-                                    <button class="img-container" onclick={() => openFullScreen(`/api/images/${outputDir}/${res.filename}`)}>
-                                        <img src="/api/images/{outputDir}/{res.filename}" alt="Generated" />
-                                        <div class="img-overlay">Click to Enlarge</div>
-                                    </button>
+                                    {@const fileExt = res.filename?.split('.').pop()?.toLowerCase()}
+                                    {#if ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fileExt)}
+                                        <button class="img-container" onclick={() => openFullScreen(`/api/images/${outputDir}/${res.filename}?t=${res.ts || ''}`)}>
+                                            <img src="/api/images/{outputDir}/{res.filename}?t={res.ts || ''}" alt="Generated" />
+                                            <div class="img-overlay">Click to Enlarge</div>
+                                        </button>
+                                    {:else}
+                                        <a class="file-download" href={`/api/images/${outputDir}/${res.filename}?t=${res.ts || ''}`} download={res.filename}>
+                                            <div class="file-icon">📄</div>
+                                            <div class="file-info">
+                                                <span class="file-name">{res.filename}</span>
+                                                <span class="file-type">{fileExt?.toUpperCase() || 'FILE'}</span>
+                                            </div>
+                                            <button class="download-btn">Download</button>
+                                        </a>
+                                    {/if}
                                 {:else if res.status === 'FAILED' || res.status === 'CANCELLED'}
                                     <div class="error-placeholder">{res.status}</div>
                                 {:else}
@@ -246,7 +303,7 @@
                                 {/if}
                             </div>
                             <div class="prompt-display">
-                                <label>Prompt</label>
+                                <div class="prompt-label">Prompt</div>
                                 <textarea readonly value={res.prompt || ''}></textarea>
                                 {#if res.error}
                                     <p class="error-text">{res.error}</p>
@@ -322,6 +379,50 @@
 
     .field { margin-bottom: 12px; display: flex; flex-direction: column; width: 100%; }
     label { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+
+    /* Toggle Switch Styles */
+    .toggle-field { margin-bottom: 16px; }
+    .toggle-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        padding: 12px;
+        background: #f8fafc;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+    }
+    .toggle-text { font-weight: 600; color: #1e293b; }
+    .toggle-checkbox {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    .toggle-slider {
+        position: relative;
+        width: 44px;
+        height: 24px;
+        background: #cbd5e1;
+        border-radius: 99px;
+        transition: background 0.2s;
+        flex-shrink: 0;
+    }
+    .toggle-slider::before {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.2s;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    .toggle-checkbox:checked + .toggle-slider { background: #2563eb; }
+    .toggle-checkbox:checked + .toggle-slider::before { transform: translateX(20px); }
+    .toggle-description { font-size: 0.75rem; color: #64748b; margin-top: -8px; margin-bottom: 12px; }
     input, select, textarea { 
         width: 100%;
         padding: 12px; 
@@ -387,6 +488,15 @@
     .img-container { position: relative; padding: 0; border: none; background: none; width: 100%; border-radius: 8px; overflow: hidden; }
     .img-container img { width: 100%; display: block; }
     .img-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); color: white; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; font-size: 0.8rem; }
+
+    /* File Download Card Styles */
+    .file-download { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 8px; text-decoration: none; color: inherit; width: 100%; min-height: 150px; }
+    .file-icon { font-size: 2.5rem; margin-bottom: 8px; }
+    .file-info { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 12px; text-align: center; }
+    .file-name { font-size: 0.75rem; font-weight: 600; color: #1e293b; word-break: break-all; }
+    .file-type { font-size: 0.65rem; padding: 2px 8px; background: #e2e8f0; border-radius: 99px; font-weight: 600; color: #64748b; }
+    .download-btn { padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+    .download-btn:hover { background: #1d4ed8; }
     
     @media (hover: hover) {
         .img-container:hover .img-overlay { opacity: 1; }
@@ -394,6 +504,7 @@
 
     .loading-placeholder, .error-placeholder { width: 100%; aspect-ratio: 1; background: #f1f5f9; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 0.8rem; color: #94a3b8; border: 2px dashed #e2e8f0; }
     .prompt-display { display: flex; flex-direction: column; width: 100%; }
+    .prompt-label { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
     .prompt-display textarea { width: 100%; height: 100px; background: #f8fafc; border: 1px solid #f1f5f9; font-size: 0.85rem; }
     .error-text { color: #dc2626; font-size: 0.8rem; margin-top: 8px; }
 
@@ -402,4 +513,11 @@
     .modal-content { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
     .modal-content img { max-width: 100%; max-height: 100%; object-fit: contain; }
     .close-modal { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 10px; line-height: 1; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+
+    /* Toast Notification Styles */
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; animation: slideUp 0.3s ease-out; max-width: 400px; text-align: center; }
+    @keyframes slideUp {
+        from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+        to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
 </style>
