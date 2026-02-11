@@ -9,6 +9,8 @@
     let aspectRatio = $state('1:1');
     let geminiKey = $state('');
     let rhubKey = $state('');
+    let runpodKey = $state('');
+    let promptProvider = $state('gemini');
     let loading = $state(false);
     let results = $state<any[]>([]);
     let error = $state('');
@@ -33,7 +35,9 @@
             subject,
             aspectRatio,
             geminiKey,
-            rhubKey
+            rhubKey,
+            runpodKey,
+            promptProvider
         };
 
         for (let i = 0; i < numPrompts; i++) {
@@ -137,12 +141,25 @@
             <h2>API Configuration</h2>
             <div class="grid">
                 <div class="field">
-                    <label for="geminiKey">Gemini API Key</label>
-                    <input type="password" id="geminiKey" bind:value={geminiKey} placeholder="Enter Gemini Key" />
+                    <label for="promptProvider">AI Prompt Provider</label>
+                    <select id="promptProvider" bind:value={promptProvider}>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="runpod">RunPod (Qwen 30B)</option>
+                    </select>
                 </div>
                 <div class="field">
                     <label for="rhubKey">RunningHub API Key</label>
                     <input type="password" id="rhubKey" bind:value={rhubKey} placeholder="Enter RunningHub Key" />
+                </div>
+            </div>
+            <div class="grid" style="margin-top: 12px;">
+                <div class="field">
+                    <label for="geminiKey">Gemini API Key</label>
+                    <input type="password" id="geminiKey" bind:value={geminiKey} placeholder="Enter Gemini Key" />
+                </div>
+                <div class="field">
+                    <label for="runpodKey">RunPod API Key</label>
+                    <input type="password" id="runpodKey" bind:value={runpodKey} placeholder="Enter RunPod Key" />
                 </div>
             </div>
         </section>
