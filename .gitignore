@@ -1,2 +1,4 @@
 outputs/
 .serena/
+.env
+tmp/
