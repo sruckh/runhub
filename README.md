@@ -1,22 +1,19 @@
-# iMontage RunningHub
+# rhub — RunningHub Precision Control Center
 
-> AI-powered batch image generation interface using Google Gemini for prompt engineering and RunningHub's FLUX.1-dev LoRA pipeline.
+> **Advanced RunningHub & FLUX.1-dev control center. Featuring AI-orchestrated prompt engineering from 300 photogenic locations, sequential batch queuing, and LSB steganography decoding.**
 
-A self-hosted SvelteKit web application that automates high-quality image generation. It uses Google Gemini (or RunPod Qwen) to craft diverse, scenario-driven prompts from a subject description, then submits them to RunningHub for FLUX.1-dev LoRA-based image synthesis — all through a clean browser UI.
+**rhub** is a specialized SvelteKit-based dashboard that transforms simple subject descriptions into high-quality, LoRA-consistent imagery. It solves the "repetition problem" in AI generation by bridging expert prompt engineering (Gemini/Qwen) with the FLUX.1-dev synthesis pipeline.
 
-## Features
+## Key Features
 
-- **AI Prompt Engineering** — Google Gemini 3 Flash or RunPod Qwen 30B generates unique, detailed FLUX.1-dev prompts using a 2-step process: curated location selection + AI composition
-- **300 Curated Locations** — True random location diversity via a shuffled pool of 300 photogenic locations across 15 categories, eliminating AI repetition bias
-- **TT-Decoder (LSB Steganography)** — Optional decoding of hidden files from RunningHub output images; automatically extracts and saves the embedded content
-- **Dual RunningHub Workflows** — Separate workflow endpoints for encoded (TT-Decode) and direct (standard) image output
-- **Batch Generation** — Queue up to 50 sequential image generations with a single click
-- **LoRA Support** — Point to any custom LoRA model URL for character-consistent output
-- **Flexible Aspect Ratios** — 9 presets (1:1, 16:9, 9:16, 3:2, etc.) with automatic 16px-aligned dimension calculation
-- **Live Status Tracking** — Real-time polling with per-image status badges (Processing, Success, Failed, Cancelled)
-- **Image Preview & Fullscreen** — Inline thumbnails with click-to-enlarge modal viewer; non-image decoded files get download cards
-- **Auto File Management** — Sequential filename numbering with configurable prefix and output directory
-- **Docker-Ready** — Multi-stage build with volume-mounted output directory
+- **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed FLUX.1-dev prompts via a 2-step process: location selection + AI composition.
+- **Custom Prompt Support** — Toggle between AI-engineered prompts or directly supply your own final FLUX prompts to bypass the AI layer.
+- **300 Curated Locations** — Module-level Fisher-Yates shuffled queue of 300 unique locations (Urban, Arctic, Desert, etc.) ensures zero repetition across large batches.
+- **TT-Decoder (LSB Steganography)** — Built-in TypeScript decoder for extracting hidden file data from RunningHub PNGs using LSB steganography.
+- **Workflow Efficiency** — Bypasses RunningHub’s single-task limitation with a non-blocking sequential queue and real-time polling (up to 50 jobs).
+- **LoRA-Consistent Output** — Full support for custom LoRA model URLs with character-consistent synthesis.
+- **Flexible Dimensions** — 9 aspect ratio presets with automatic 16px-aligned dimension calculation.
+- **Modern Tech Stack** — Built with Svelte 5 (Runes), TypeScript, and Node.js; fully containerized for Docker deployment.
 
 ## Architecture
 
@@ -97,7 +94,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ### `POST /api/generate`
 
-Selects a random location, generates a prompt via AI, and submits an image generation job to RunningHub.
+Selects a random location, generates a prompt via AI (or uses a custom one), and submits an image generation job to RunningHub.
 
 **Request Body:**
 ```json
@@ -109,7 +106,9 @@ Selects a random location, generates a prompt via AI, and submits an image gener
   "rhubKey": "...",
   "runpodKey": "...",
   "promptProvider": "gemini",
-  "useTtDecoder": false
+  "useTtDecoder": false,
+  "useCustomPrompt": false,
+  "customPrompt": ""
 }
 ```
 

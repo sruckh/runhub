@@ -3,6 +3,8 @@
 
     let loraUrl = $state('');
     let subject = $state('');
+    let customPrompt = $state('');
+    let useCustomPrompt = $state(false);
     let numPrompts = $state(1);
     let outputDir = $state('generations');
     let prefix = $state('image');
@@ -50,6 +52,8 @@
         const payloadBase = {
             loraUrl,
             subject,
+            customPrompt,
+            useCustomPrompt,
             aspectRatio,
             geminiKey,
             rhubKey,
@@ -210,10 +214,27 @@
                 <input type="text" id="loraUrl" bind:value={loraUrl} placeholder="https://..." />
             </div>
             
-            <div class="field">
-                <label for="subject">Subject Characteristics</label>
-                <textarea id="subject" bind:value={subject} placeholder="e.g. 50-year old woman..."></textarea>
+            <!-- Custom Prompt Toggle -->
+            <div class="field toggle-field">
+                <label for="useCustomPrompt" class="toggle-label">
+                    <span class="toggle-text">Use Custom Prompt</span>
+                    <input type="checkbox" id="useCustomPrompt" bind:checked={useCustomPrompt} class="toggle-checkbox" />
+                    <span class="toggle-slider"></span>
+                </label>
+                <p class="toggle-description">Directly supply the final FLUX prompt (bypasses AI engineering)</p>
             </div>
+
+            {#if useCustomPrompt}
+                <div class="field">
+                    <label for="customPrompt">Custom FLUX Prompt</label>
+                    <textarea id="customPrompt" bind:value={customPrompt} placeholder="Enter your full FLUX prompt here..."></textarea>
+                </div>
+            {:else}
+                <div class="field">
+                    <label for="subject">Subject Characteristics</label>
+                    <textarea id="subject" bind:value={subject} placeholder="e.g. 50-year old woman..."></textarea>
+                </div>
+            {/if}
 
             <div class="grid">
                 <div class="field">

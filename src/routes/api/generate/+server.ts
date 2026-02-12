@@ -12,18 +12,23 @@ export const POST: RequestHandler = async ({ request }) => {
         rhubKey,
         runpodKey: userRunpodKey,
         promptProvider = 'gemini',
-        useTtDecoder = false
+        useTtDecoder = false,
+        customPrompt = '',
+        useCustomPrompt = false
     } = await request.json();
 
     // Use user-provided RunPod key (no fallback to env var)
     const runpodKey = userRunpodKey;
 
-    if (promptProvider === 'gemini' && !geminiKey) {
-        return json({ error: 'Gemini API Key is required' }, { status: 400 });
+    if (!useCustomPrompt) {
+        if (promptProvider === 'gemini' && !geminiKey) {
+            return json({ error: 'Gemini API Key is required' }, { status: 400 });
+        }
+        if (promptProvider === 'runpod' && !runpodKey) {
+            return json({ error: 'RunPod API Key is required' }, { status: 400 });
+        }
     }
-    if (promptProvider === 'runpod' && !runpodKey) {
-        return json({ error: 'RunPod API Key is required' }, { status: 400 });
-    }
+    
     if (!rhubKey) {
         return json({ error: 'RunningHub API Key is required' }, { status: 400 });
     }
@@ -31,49 +36,53 @@ export const POST: RequestHandler = async ({ request }) => {
     try {
         let finalPrompt = '';
 
-        // Helper for AI calls
-        async function askAI(system: string, user: string, temperature = 1.0) {
-            if (promptProvider === 'gemini') {
-                const ai = new GoogleGenAI({ apiKey: geminiKey });
-                const response = await ai.models.generateContent({
-                    model: 'gemini-3-flash-preview',
-                    contents: user,
-                    config: {
-                        systemInstruction: system,
-                        temperature
-                    }
-                });
-                return (response.text || '').trim();
-            } else {
-                const runpodPayload = {
-                    input: {
-                        model: "qwen3-30b-a3b",
-                        messages: [
-                            { role: "system", content: system },
-                            { role: "user", content: user }
-                        ],
-                        temperature
-                    }
-                };
-                const response = await fetch('https://api.runpod.ai/v2/xj5960btg70pgu/runsync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${runpodKey}` },
-                    body: JSON.stringify(runpodPayload)
-                });
-                const data = await response.json();
-                if (data.status === 'COMPLETED') return data.output.result.choices[0].message.content.trim();
-                throw new Error('RunPod call failed');
+        if (useCustomPrompt && customPrompt.trim()) {
+            finalPrompt = customPrompt.trim();
+            console.log('Using CUSTOM PROMPT:', finalPrompt);
+        } else {
+            // Helper for AI calls
+            async function askAI(system: string, user: string, temperature = 1.0) {
+                if (promptProvider === 'gemini') {
+                    const ai = new GoogleGenAI({ apiKey: geminiKey });
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-3-flash-preview',
+                        contents: user,
+                        config: {
+                            systemInstruction: system,
+                            temperature
+                        }
+                    });
+                    return (response.text || '').trim();
+                } else {
+                    const runpodPayload = {
+                        input: {
+                            model: "qwen3-30b-a3b",
+                            messages: [
+                                { role: "system", content: system },
+                                { role: "user", content: user }
+                            ],
+                            temperature
+                        }
+                    };
+                    const response = await fetch('https://api.runpod.ai/v2/xj5960btg70pgu/runsync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${runpodKey}` },
+                        body: JSON.stringify(runpodPayload)
+                    });
+                    const data = await response.json();
+                    if (data.status === 'COMPLETED') return data.output.result.choices[0].message.content.trim();
+                    throw new Error('RunPod call failed');
+                }
             }
-        }
 
-        // STEP 1: Pick location from curated pool (true randomness, no AI bias)
-        const location = getNextLocation();
-        console.log('Step 1: Location (from pool):', location);
+            // STEP 1: Pick location from curated pool (true randomness, no AI bias)
+            const location = getNextLocation();
+            console.log('Step 1: Location (from pool):', location);
 
-        // STEP 2: AI designs composition for this location + subject
-        console.log('Step 2: Choosing Composition...');
-        const compositionPrompt = await askAI(
-            `You are a professional photographer planning a social media shoot.
+            // STEP 2: AI designs composition for this location + subject
+            console.log('Step 2: Choosing Composition...');
+            const compositionPrompt = await askAI(
+                `You are a professional photographer planning a social media shoot.
 Given a specific location and subject, describe a compelling composition, lighting, and activity.
 Rules:
 - Avoid cliches: no "standing and smiling", no "looking at camera", no "posing".
@@ -82,13 +91,13 @@ Rules:
 - Include time of day and lighting quality.
 Location: ${location}
 Subject: ${subject}`,
-            "Describe the scene in 2-3 vivid sentences: composition, activity, clothing, and lighting.",
-            1.3
-        );
+                "Describe the scene in 2-3 vivid sentences: composition, activity, clothing, and lighting.",
+                1.3
+            );
 
-        // STEP 3: Generate final FLUX prompt
-        console.log('Step 3: Generating FLUX Prompt...');
-        const finalSystemPrompt = `You are an expert FLUX.1-dev prompt engineer.
+            // STEP 3: Generate final FLUX prompt
+            console.log('Step 3: Generating FLUX Prompt...');
+            const finalSystemPrompt = `You are an expert FLUX.1-dev prompt engineer.
 Generate a single, detailed prompt for a character LoRA photograph that looks like a real social media post.
 
 RULES:
@@ -98,11 +107,12 @@ RULES:
 4. Include specific details: fabric types, colors, accessories, environment textures.
 5. Output format: PROMPT: <single detailed prompt here>`;
 
-        const finalUserMessage = `Subject: ${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate one detailed, unique FLUX prompt.`;
+            const finalUserMessage = `Subject: ${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate one detailed, unique FLUX prompt.`;
 
-        const responseText = await askAI(finalSystemPrompt, finalUserMessage, 1.0);
-        const promptMatch = responseText.match(/PROMPT:\s*(.*)/is);
-        finalPrompt = promptMatch ? promptMatch[1].trim() : responseText.trim();
+            const responseText = await askAI(finalSystemPrompt, finalUserMessage, 1.0);
+            const promptMatch = responseText.match(/PROMPT:\s*(.*)/is);
+            finalPrompt = promptMatch ? promptMatch[1].trim() : responseText.trim();
+        }
 
         const { width, height } = calculateDimensions(aspectRatio);
 
