@@ -7,11 +7,10 @@
 ## Key Features
 
 - **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed FLUX.1-dev prompts via a 2-step process: location selection + AI composition.
-- **Custom Prompt Support** — Toggle between AI-engineered prompts or directly supply your own final FLUX prompts to bypass the AI layer.
+- **Persistent Sequential Queue** — Bypasses RunningHub’s single-task limitation with a robust client-side queue. Captures full form state (LoRA, Output Dir, API keys) per task, survives page refreshes, and processes jobs one-by-one.
+- **Custom Prompt Support** — Toggle between AI-engineered prompts or directly supply your own final FLUX prompts. Strictly enforces the bypass with zero LLM intervention when active.
 - **300 Curated Locations** — Module-level Fisher-Yates shuffled queue of 300 unique locations (Urban, Arctic, Desert, etc.) ensures zero repetition across large batches.
 - **TT-Decoder (LSB Steganography)** — Built-in TypeScript decoder for extracting hidden file data from RunningHub PNGs using LSB steganography.
-- **Workflow Efficiency** — Bypasses RunningHub’s single-task limitation with a non-blocking sequential queue and real-time polling (up to 50 jobs).
-- **LoRA-Consistent Output** — Full support for custom LoRA model URLs with character-consistent synthesis.
 - **Flexible Dimensions** — 9 aspect ratio presets with automatic 16px-aligned dimension calculation.
 - **Modern Tech Stack** — Built with Svelte 5 (Runes), TypeScript, and Node.js; fully containerized for Docker deployment.
 
@@ -25,15 +24,20 @@ The application runs as a single SvelteKit container with server-side API routes
 
 ![Data Flow Diagram](./docs/diagrams/data-flow.svg)
 
-1. User provides subject characteristics, LoRA URL, and API keys
-2. A location is randomly selected from 300 curated photogenic locations (Fisher-Yates shuffle — no repeats until all 300 are used)
-3. AI generates a scene composition for the location + subject (clothing, lighting, activity)
-4. AI synthesizes a detailed FLUX.1-dev prompt from the composition
-5. Image dimensions are calculated from the chosen aspect ratio (16px-aligned)
-6. The prompt, LoRA, dimensions, and a random seed are submitted to RunningHub (workflow selected by TT-Decode toggle)
-7. The client polls the task status every 5 seconds
-8. On success, the image is downloaded; if TT-Decode is enabled, hidden data is extracted via LSB steganography decoding
-9. The final file (decoded or original) is saved to the mounted volume and displayed in the results feed
+1. User provides subject characteristics, LoRA URL, and API keys.
+2. User adds one or more tasks to the **Persistent Queue** (capturing current parameters).
+3. The background processor picks the next task from the queue:
+    - If **Custom Prompt** is ON: Uses the user-provided prompt directly.
+    - If **AI Engineering** is ON:
+        a. A location is randomly selected from 300 curated locations (Fisher-Yates shuffle).
+        b. AI generates a scene composition for the location + subject.
+        c. AI synthesizes a detailed FLUX.1-dev prompt from the composition.
+4. Image dimensions are calculated from the chosen aspect ratio (16px-aligned).
+5. The prompt, LoRA, dimensions, and a random seed are submitted to RunningHub.
+6. The client polls the task status every 5 seconds.
+7. On success, the image is downloaded; if TT-Decode is enabled, hidden data is extracted.
+8. The final file is saved to the task's specific output directory and displayed.
+9. The process repeats for the next item in the queue.
 
 ## Quick Start
 
