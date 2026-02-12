@@ -17,13 +17,17 @@
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
     let useTtDecoder = $state(savedTtDecoder);  // TT-Decoder toggle
     let loading = $state(false);
+    let queue = $state<any[]>([]);
+    let isProcessingQueue = $state(false);
 
-    // Persist setting changes
+    // Persist setting changes and queue
     $effect(() => {
         if (typeof localStorage !== 'undefined') {
             localStorage.setItem('useTtDecoder', String(useTtDecoder));
+            localStorage.setItem('rhub_queue', JSON.stringify(queue));
         }
     });
+
     let results = $state<any[]>([]);
     let error = $state('');
     
@@ -40,16 +44,27 @@
 
     onMount(() => {
         console.log('iMontage Interface Mounted');
+        const savedQueue = localStorage.getItem('rhub_queue');
+        if (savedQueue) {
+            try {
+                queue = JSON.parse(savedQueue);
+                // Auto-start processing if queue is not empty
+                if (queue.length > 0) processQueue();
+            } catch (e) {
+                console.error('Failed to parse queue', e);
+            }
+        }
     });
 
     const aspectRatios = ['1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4'];
 
     async function handleSubmit() {
-        loading = true;
-        isCancelled = false;
-        error = '';
-        
-        const payloadBase = {
+        // Legacy multi-submit: just adds them to the queue and starts processing
+        addToQueue();
+    }
+
+    async function addToQueue() {
+        const baseTask = {
             loraUrl,
             subject,
             customPrompt,
@@ -59,30 +74,74 @@
             rhubKey,
             runpodKey,
             promptProvider,
-            useTtDecoder
+            useTtDecoder,
+            outputDir,
+            prefix,
+            createdAt: new Date().toISOString()
         };
 
+        const newTasks = [];
         for (let i = 0; i < numPrompts; i++) {
-            if (isCancelled) break;
-            await startGeneration(payloadBase, i);
+            newTasks.push({ 
+                ...baseTask, 
+                id: Math.random().toString(36).substring(7),
+                index: i + 1
+            });
         }
+
+        queue = [...queue, ...newTasks];
+        showToast(`Added ${numPrompts} task(s) to queue`);
         
+        if (!isProcessingQueue) {
+            processQueue();
+        }
+    }
+
+    async function processQueue() {
+        if (isProcessingQueue || queue.length === 0) return;
+        
+        isProcessingQueue = true;
+        loading = true;
+        isCancelled = false;
+
+        while (queue.length > 0 && !isCancelled) {
+            const task = queue[0];
+            await startGeneration(task);
+            // Move from queue to results is handled by startGeneration adding to results
+            // We just remove it from the queue here
+            queue = queue.slice(1);
+        }
+
+        isProcessingQueue = false;
         loading = false;
     }
 
     function handleCancel() {
         isCancelled = true;
+        isProcessingQueue = false;
+        loading = false;
+    }
+
+    function removeFromQueue(id: string) {
+        queue = queue.filter(t => t.id !== id);
     }
 
     function clearQueue() {
+        queue = [];
         if (!loading) {
             results = [];
         }
     }
 
-    async function startGeneration(payload: any, index: number) {
-        const resultId = Math.random().toString(36).substring(7);
-        results = [{ id: resultId, status: 'INITIALIZING', prompt: `Preparing generation ${index + 1}...` }, ...results];
+    async function startGeneration(payload: any) {
+        const resultId = payload.id;
+        const displayPrompt = payload.useCustomPrompt ? payload.customPrompt : payload.subject;
+        results = [{ 
+            id: resultId, 
+            status: 'INITIALIZING', 
+            prompt: `Preparing: ${displayPrompt.substring(0, 50)}...`,
+            outputDir: payload.outputDir // Store for rendering
+        }, ...results];
 
         try {
             const response = await fetch('/api/generate', {
@@ -97,14 +156,16 @@
             const taskId = data.taskId;
             updateResult(resultId, { status: 'PROCESSING', prompt: data.prompt, taskId });
 
-            await pollTask(resultId, taskId);
+            await pollTask(resultId, taskId, payload);
 
         } catch (e: any) {
             updateResult(resultId, { status: 'FAILED', error: e.message });
         }
     }
 
-    async function pollTask(resultId: string, taskId: string) {
+    async function pollTask(resultId: string, taskId: string, payload: any) {
+        const { rhubKey, outputDir, prefix, useTtDecoder } = payload;
+        
         while (!isCancelled) {
             try {
                 const response = await fetch('/api/check', {
@@ -116,7 +177,6 @@
 
                 if (data.status === 'SUCCESS') {
                     updateResult(resultId, { status: 'SUCCESS', filename: data.filename, resultInfo: data.resultInfo, ts: Date.now() });
-
                     break;
                 } else if (data.status === 'FAILED') {
                     updateResult(resultId, { status: 'FAILED', error: data.error });
@@ -129,8 +189,8 @@
             await new Promise(r => setTimeout(r, 5000));
         }
         
-        if (isCancelled) {
-            updateResult(resultId, { status: 'CANCELLED', error: 'User cancelled operation' });
+        if (isCancelled && results.find(r => r.id === resultId)?.status !== 'SUCCESS') {
+            updateResult(resultId, { status: 'CANCELLED', error: 'Operation cancelled' });
         }
     }
 
@@ -264,13 +324,12 @@
         </section>
 
         <div class="actions">
-            {#if !loading}
-                <button class="btn-primary" onclick={handleSubmit}>Start Generation</button>
-                {#if results.length > 0}
-                    <button class="btn-secondary" onclick={clearQueue}>Clear Results</button>
-                {/if}
-            {:else}
-                <button class="btn-danger" onclick={handleCancel}>Cancel Batch</button>
+            <button class="btn-primary" onclick={addToQueue}>Add to Queue</button>
+            {#if loading}
+                <button class="btn-danger" onclick={handleCancel}>Cancel Active</button>
+            {/if}
+            {#if queue.length > 0 || results.length > 0}
+                <button class="btn-secondary" onclick={clearQueue}>Clear All</button>
             {/if}
         </div>
     </div>
@@ -284,6 +343,26 @@
         <div class="toast">{toastMessage}</div>
     {/if}
 
+    {#if queue.length > 0}
+        <section class="results queue-section">
+            <h2>Pending Queue ({queue.length})</h2>
+            <div class="queue-list">
+                {#each queue as task (task.id)}
+                    <div class="queue-item">
+                        <div class="queue-info">
+                            <span class="queue-tag">{task.aspectRatio}</span>
+                            <span class="queue-prompt">
+                                {task.useCustomPrompt ? task.customPrompt : task.subject}
+                            </span>
+                        </div>
+                        <button class="queue-remove" onclick={() => removeFromQueue(task.id)} title="Remove from queue">
+                            &times;
+                        </button>
+                    </div>
+                {/each}
+            </div>
+        </section>
+    {/if}
 
     {#if results.length > 0}
         <section class="results">
@@ -303,12 +382,12 @@
                                 {#if res.status === 'SUCCESS'}
                                     {@const fileExt = res.filename?.split('.').pop()?.toLowerCase()}
                                     {#if ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fileExt)}
-                                        <button class="img-container" onclick={() => openFullScreen(`/api/images/${outputDir}/${res.filename}?t=${res.ts || ''}`)}>
-                                            <img src="/api/images/{outputDir}/{res.filename}?t={res.ts || ''}" alt="Generated" />
+                                        <button class="img-container" onclick={() => openFullScreen(`/api/images/${res.outputDir || outputDir}/${res.filename}?t=${res.ts || ''}`)}>
+                                            <img src="/api/images/{res.outputDir || outputDir}/{res.filename}?t={res.ts || ''}" alt="Generated" />
                                             <div class="img-overlay">Click to Enlarge</div>
                                         </button>
                                     {:else}
-                                        <a class="file-download" href={`/api/images/${outputDir}/${res.filename}?t=${res.ts || ''}`} download={res.filename}>
+                                        <a class="file-download" href={`/api/images/${res.outputDir || outputDir}/${res.filename}?t=${res.ts || ''}`} download={res.filename}>
                                             <div class="file-icon">📄</div>
                                             <div class="file-info">
                                                 <span class="file-name">{res.filename}</span>
@@ -528,6 +607,57 @@
     .prompt-label { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
     .prompt-display textarea { width: 100%; height: 100px; background: #f8fafc; border: 1px solid #f1f5f9; font-size: 0.85rem; }
     .error-text { color: #dc2626; font-size: 0.8rem; margin-top: 8px; }
+
+    /* Queue Styles */
+    .queue-section { border-left: 4px solid #2563eb; }
+    .queue-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .queue-item { 
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between; 
+        padding: 10px 14px; 
+        background: #f8fafc; 
+        border: 1px solid #e2e8f0; 
+        border-radius: 8px; 
+        gap: 12px;
+    }
+    .queue-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .queue-tag { 
+        font-size: 0.65rem; 
+        font-weight: 700; 
+        background: #e2e8f0; 
+        color: #475569; 
+        padding: 2px 6px; 
+        border-radius: 4px; 
+        white-space: nowrap;
+    }
+    .queue-prompt { 
+        font-size: 0.85rem; 
+        color: #1e293b; 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+        flex: 1;
+    }
+    .queue-remove { 
+        background: #fee2e2; 
+        color: #dc2626; 
+        border: none; 
+        width: 28px; 
+        height: 28px; 
+        border-radius: 50%; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        cursor: pointer; 
+        font-size: 1.2rem; 
+        padding: 0;
+        flex-shrink: 0;
+        transition: background 0.2s;
+    }
+    .queue-remove:hover { background: #fecaca; }
+
+    .loader-dots { margin-left: 8px; }
 
     /* Modal Styles */
     .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; align-items: center; justify-content: center; }

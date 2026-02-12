@@ -36,10 +36,16 @@ export const POST: RequestHandler = async ({ request }) => {
     try {
         let finalPrompt = '';
 
-        if (useCustomPrompt && customPrompt.trim()) {
+        if (useCustomPrompt) {
+            if (!customPrompt.trim()) {
+                return json({ error: 'Custom prompt is required when "Use Custom Prompt" is enabled' }, { status: 400 });
+            }
             finalPrompt = customPrompt.trim();
-            console.log('Using CUSTOM PROMPT:', finalPrompt);
+            console.log('Using CUSTOM PROMPT (Directly to RunningHub):', finalPrompt);
         } else {
+            if (!subject.trim()) {
+                return json({ error: 'Subject characteristics are required for AI prompt engineering' }, { status: 400 });
+            }
             // Helper for AI calls
             async function askAI(system: string, user: string, temperature = 1.0) {
                 if (promptProvider === 'gemini') {
