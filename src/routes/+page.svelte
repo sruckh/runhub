@@ -13,12 +13,19 @@
     let rhubKey = $state('');
     let runpodKey = $state('');
     let promptProvider = $state('gemini');
-    // Load persisted TT-Decoder setting from localStorage
+    // Load persisted settings
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
-    let useTtDecoder = $state(savedTtDecoder);  // TT-Decoder toggle
+    let useTtDecoder = $state(savedTtDecoder);
+    
+    let activeTab = $state('generate'); // 'generate' or 'upscale'
     let loading = $state(false);
     let queue = $state<any[]>([]);
     let isProcessingQueue = $state(false);
+
+    // Upscale states
+    let upscaleFiles = $state<File[]>([]);
+    let fileInput: HTMLInputElement;
+    const upscaleFilesMap = new Map<string, File>();
 
     // Persist setting changes and queue
     $effect(() => {
@@ -59,12 +66,16 @@
     const aspectRatios = ['1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4'];
 
     async function handleSubmit() {
-        // Legacy multi-submit: just adds them to the queue and starts processing
-        addToQueue();
+        if (activeTab === 'generate') {
+            addToQueue();
+        } else {
+            addUpscaleToQueue();
+        }
     }
 
     async function addToQueue() {
         const baseTask = {
+            type: 'generate',
             loraUrl,
             subject,
             customPrompt,
@@ -97,6 +108,37 @@
         }
     }
 
+    async function addUpscaleToQueue() {
+        if (upscaleFiles.length === 0) {
+            error = 'Please select at least one image to upscale';
+            return;
+        }
+        
+        const newTasks = [];
+        for (const file of upscaleFiles) {
+            const id = Math.random().toString(36).substring(7);
+            upscaleFilesMap.set(id, file);
+            newTasks.push({
+                type: 'upscale',
+                id,
+                rhubKey,
+                useTtDecoder,
+                outputDir,
+                prefix,
+                fileName: file.name,
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        queue = [...queue, ...newTasks];
+        showToast(`Added ${upscaleFiles.length} upscale task(s) to queue`);
+        upscaleFiles = []; // Clear selection after adding
+        
+        if (!isProcessingQueue) {
+            processQueue();
+        }
+    }
+
     async function processQueue() {
         if (isProcessingQueue || queue.length === 0) return;
         
@@ -106,9 +148,11 @@
 
         while (queue.length > 0 && !isCancelled) {
             const task = queue[0];
-            await startGeneration(task);
-            // Move from queue to results is handled by startGeneration adding to results
-            // We just remove it from the queue here
+            if (task.type === 'upscale') {
+                await startUpscale(task);
+            } else {
+                await startGeneration(task);
+            }
             queue = queue.slice(1);
         }
 
@@ -140,7 +184,7 @@
             id: resultId, 
             status: 'INITIALIZING', 
             prompt: `Preparing: ${displayPrompt.substring(0, 50)}...`,
-            outputDir: payload.outputDir // Store for rendering
+            outputDir: payload.outputDir
         }, ...results];
 
         try {
@@ -157,6 +201,46 @@
             updateResult(resultId, { status: 'PROCESSING', prompt: data.prompt, taskId });
 
             await pollTask(resultId, taskId, payload);
+
+        } catch (e: any) {
+            updateResult(resultId, { status: 'FAILED', error: e.message });
+        }
+    }
+
+    async function startUpscale(task: any) {
+        const resultId = task.id;
+        const file = upscaleFilesMap.get(resultId);
+        
+        results = [{ 
+            id: resultId, 
+            status: 'INITIALIZING', 
+            prompt: `Upscaling: ${task.fileName || 'Image'}`,
+            outputDir: task.outputDir
+        }, ...results];
+
+        if (!file) {
+            updateResult(resultId, { status: 'FAILED', error: 'File data lost (page refresh?)' });
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('rhubKey', task.rhubKey);
+            formData.append('useTtDecoder', String(task.useTtDecoder));
+
+            const response = await fetch('/api/upscale', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            const taskId = data.taskId;
+            updateResult(resultId, { status: 'PROCESSING', taskId });
+
+            await pollTask(resultId, taskId, task);
 
         } catch (e: any) {
             updateResult(resultId, { status: 'FAILED', error: e.message });
@@ -211,6 +295,25 @@
     function openFullScreen(url: string) {
         selectedImage = url;
     }
+
+    function handleFileSelect(e: Event) {
+        const files = (e.target as HTMLInputElement).files;
+        if (files) {
+            upscaleFiles = [...upscaleFiles, ...Array.from(files)];
+        }
+    }
+
+    function handleDrop(e: DragEvent) {
+        e.preventDefault();
+        const files = e.dataTransfer?.files;
+        if (files) {
+            upscaleFiles = [...upscaleFiles, ...Array.from(files)];
+        }
+    }
+
+    function removeUpscaleFile(file: File) {
+        upscaleFiles = upscaleFiles.filter(f => f !== file);
+    }
 </script>
 
 <!-- Modal for Full Screen Image -->
@@ -257,59 +360,118 @@
             </div>
         </section>
 
+        <div class="tabs-container">
+            <div class="tabs">
+                <button class="tab-btn {activeTab === 'generate' ? 'active' : ''}" onclick={() => activeTab = 'generate'}>
+                    <span class="tab-icon">✨</span> Generate
+                </button>
+                <button class="tab-btn {activeTab === 'upscale' ? 'active' : ''}" onclick={() => activeTab = 'upscale'}>
+                    <span class="tab-icon">🚀</span> Upscale
+                </button>
+                <div class="tab-slider" style="transform: translateX({activeTab === 'generate' ? '0' : '100%'})"></div>
+            </div>
+        </div>
+
         <section class="lora-settings">
-            <h2>Generation Settings</h2>
+            {#if activeTab === 'generate'}
+                <div class="settings-header">
+                    <h2>Generation Settings</h2>
+                    <span class="settings-badge">FLUX.1-dev</span>
+                </div>
 
-            <!-- TT-Decoder Toggle -->
-            <div class="field toggle-field">
-                <label for="useTtDecoder" class="toggle-label">
-                    <span class="toggle-text">Enable TT-Decoder</span>
-                    <input type="checkbox" id="useTtDecoder" bind:checked={useTtDecoder} class="toggle-checkbox" />
-                    <span class="toggle-slider"></span>
-                </label>
-                <p class="toggle-description">Decode hidden files from returned images (LSB steganography)</p>
-            </div>
-            <div class="field">
-                <label for="loraUrl">LoRA URL</label>
-                <input type="text" id="loraUrl" bind:value={loraUrl} placeholder="https://..." />
-            </div>
-            
-            <!-- Custom Prompt Toggle -->
-            <div class="field toggle-field">
-                <label for="useCustomPrompt" class="toggle-label">
-                    <span class="toggle-text">Use Custom Prompt</span>
-                    <input type="checkbox" id="useCustomPrompt" bind:checked={useCustomPrompt} class="toggle-checkbox" />
-                    <span class="toggle-slider"></span>
-                </label>
-                <p class="toggle-description">Directly supply the final FLUX prompt (bypasses AI engineering)</p>
-            </div>
-
-            {#if useCustomPrompt}
+                <!-- TT-Decoder Toggle -->
+                <div class="field toggle-field">
+                    <label for="useTtDecoder" class="toggle-label">
+                        <span class="toggle-text">Enable TT-Decoder</span>
+                        <input type="checkbox" id="useTtDecoder" bind:checked={useTtDecoder} class="toggle-checkbox" />
+                        <span class="toggle-slider-ui"></span>
+                    </label>
+                    <p class="toggle-description">Decode hidden files from returned images (LSB steganography)</p>
+                </div>
                 <div class="field">
-                    <label for="customPrompt">Custom FLUX Prompt</label>
-                    <textarea id="customPrompt" bind:value={customPrompt} placeholder="Enter your full FLUX prompt here..."></textarea>
+                    <label for="loraUrl">LoRA URL</label>
+                    <input type="text" id="loraUrl" bind:value={loraUrl} placeholder="https://..." />
+                </div>
+                
+                <!-- Custom Prompt Toggle -->
+                <div class="field toggle-field">
+                    <label for="useCustomPrompt" class="toggle-label">
+                        <span class="toggle-text">Use Custom Prompt</span>
+                        <input type="checkbox" id="useCustomPrompt" bind:checked={useCustomPrompt} class="toggle-checkbox" />
+                        <span class="toggle-slider-ui"></span>
+                    </label>
+                    <p class="toggle-description">Directly supply the final FLUX prompt (bypasses AI engineering)</p>
+                </div>
+
+                {#if useCustomPrompt}
+                    <div class="field">
+                        <label for="customPrompt">Custom FLUX Prompt</label>
+                        <textarea id="customPrompt" bind:value={customPrompt} placeholder="Enter your full FLUX prompt here..."></textarea>
+                    </div>
+                {:else}
+                    <div class="field">
+                        <label for="subject">Subject Characteristics</label>
+                        <textarea id="subject" bind:value={subject} placeholder="e.g. 50-year old woman..."></textarea>
+                    </div>
+                {/if}
+
+                <div class="grid">
+                    <div class="field">
+                        <label for="numPrompts">Number of Prompts</label>
+                        <input type="number" id="numPrompts" bind:value={numPrompts} min="1" max="50" />
+                    </div>
+                    <div class="field">
+                        <label for="aspectRatio">Aspect Ratio</label>
+                        <select id="aspectRatio" bind:value={aspectRatio}>
+                            {#each aspectRatios as ar}
+                                <option value={ar}>{ar}</option>
+                            {/each}
+                        </select>
+                    </div>
                 </div>
             {:else}
+                <div class="settings-header">
+                    <h2>Upscale Settings</h2>
+                    <span class="settings-badge">2K Resolution</span>
+                </div>
+                <div class="field toggle-field">
+                    <label for="useTtDecoderUpscale" class="toggle-label">
+                        <span class="toggle-text">Enable TT-Decoder</span>
+                        <input type="checkbox" id="useTtDecoderUpscale" bind:checked={useTtDecoder} class="toggle-checkbox" />
+                        <span class="toggle-slider-ui"></span>
+                    </label>
+                    <p class="toggle-description">Decode hidden files from upscaled images</p>
+                </div>
+
                 <div class="field">
-                    <label for="subject">Subject Characteristics</label>
-                    <textarea id="subject" bind:value={subject} placeholder="e.g. 50-year old woman..."></textarea>
+                    <label>Upload Images</label>
+                    <div 
+                        class="drop-zone" 
+                        onclick={() => fileInput.click()} 
+                        onkeydown={(e) => e.key === 'Enter' && fileInput.click()}
+                        role="button"
+                        tabindex="0"
+                        ondragover={(e) => { e.preventDefault(); e.currentTarget.classList.add('dragover'); }}
+                        ondragleave={(e) => { e.currentTarget.classList.remove('dragover'); }}
+                        ondrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('dragover'); handleDrop(e); }}
+                    >
+                        <span class="drop-icon">📤</span>
+                        <span class="drop-text">Click to upload or drag & drop</span>
+                        <input type="file" multiple accept="image/*" bind:this={fileInput} onchange={handleFileSelect} hidden />
+                    </div>
+                    
+                    {#if upscaleFiles.length > 0}
+                        <div class="file-list">
+                            {#each upscaleFiles as file}
+                                <div class="file-item">
+                                    <span class="file-name">{file.name}</span>
+                                    <button class="remove-file" onclick={() => removeUpscaleFile(file)}>&times;</button>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
                 </div>
             {/if}
-
-            <div class="grid">
-                <div class="field">
-                    <label for="numPrompts">Number of Prompts</label>
-                    <input type="number" id="numPrompts" bind:value={numPrompts} min="1" max="50" />
-                </div>
-                <div class="field">
-                    <label for="aspectRatio">Aspect Ratio</label>
-                    <select id="aspectRatio" bind:value={aspectRatio}>
-                        {#each aspectRatios as ar}
-                            <option value={ar}>{ar}</option>
-                        {/each}
-                    </select>
-                </div>
-            </div>
 
             <div class="grid">
                 <div class="field">
@@ -324,13 +486,17 @@
         </section>
 
         <div class="actions">
-            <button class="btn-primary" onclick={addToQueue}>Add to Queue</button>
-            {#if loading}
-                <button class="btn-danger" onclick={handleCancel}>Cancel Active</button>
-            {/if}
-            {#if queue.length > 0 || results.length > 0}
-                <button class="btn-secondary" onclick={clearQueue}>Clear All</button>
-            {/if}
+            <button class="btn-primary main-action" onclick={handleSubmit}>
+                {activeTab === 'generate' ? 'Add Generation to Queue' : 'Add Upscale to Queue'}
+            </button>
+            <div class="action-grid">
+                {#if loading}
+                    <button class="btn-danger" onclick={handleCancel}>Cancel Active</button>
+                {/if}
+                {#if queue.length > 0 || results.length > 0}
+                    <button class="btn-secondary" onclick={clearQueue}>Clear All</button>
+                {/if}
+            </div>
         </div>
     </div>
 
@@ -350,9 +516,13 @@
                 {#each queue as task (task.id)}
                     <div class="queue-item">
                         <div class="queue-info">
-                            <span class="queue-tag">{task.aspectRatio}</span>
+                            <span class="queue-tag">{task.type === 'upscale' ? 'UPSCALE' : task.aspectRatio}</span>
                             <span class="queue-prompt">
-                                {task.useCustomPrompt ? task.customPrompt : task.subject}
+                                {#if task.type === 'upscale'}
+                                    {task.fileName}
+                                {:else}
+                                    {task.useCustomPrompt ? task.customPrompt : task.subject}
+                                {/if}
                             </span>
                         </div>
                         <button class="queue-remove" onclick={() => removeFromQueue(task.id)} title="Remove from queue">
@@ -403,7 +573,7 @@
                                 {/if}
                             </div>
                             <div class="prompt-display">
-                                <div class="prompt-label">Prompt</div>
+                                <div class="prompt-label">Prompt / Info</div>
                                 <textarea readonly value={res.prompt || ''}></textarea>
                                 {#if res.error}
                                     <p class="error-text">{res.error}</p>
@@ -466,6 +636,25 @@
 
     h2 { font-size: 1rem; margin: 0 0 16px 0; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; }
     
+    .settings-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .settings-header h2 { margin: 0; border: none; padding: 0; }
+    .settings-badge {
+        font-size: 0.7rem;
+        background: #eff6ff;
+        color: #2563eb;
+        padding: 2px 10px;
+        border-radius: 99px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
     .grid { 
         display: grid; 
         grid-template-columns: 1fr; 
@@ -479,6 +668,117 @@
 
     .field { margin-bottom: 12px; display: flex; flex-direction: column; width: 100%; }
     label { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+
+    /* Modern Tabs Styles */
+    .tabs-container {
+        margin-bottom: 32px;
+    }
+    .tabs {
+        display: flex;
+        background: #f1f5f9;
+        padding: 4px;
+        border-radius: 12px;
+        position: relative;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .tab-btn {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: none;
+        background: transparent;
+        color: #64748b;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 2;
+    }
+    .tab-btn.active {
+        color: #2563eb;
+    }
+    .tab-btn:not(.active):hover {
+        color: #1e293b;
+    }
+    .tab-slider {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: calc(50% - 4px);
+        height: calc(100% - 8px);
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 1;
+    }
+    .tab-icon { font-size: 1rem; }
+
+    /* Drop Zone Styles */
+    .drop-zone {
+        border: 2px dashed #cbd5e1;
+        border-radius: 12px;
+        padding: 40px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-align: center;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+        border-color: #2563eb;
+        background: #eff6ff;
+    }
+    .drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .drop-text { font-size: 0.95rem; color: #475569; font-weight: 500; }
+
+    .file-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+    }
+    .file-item {
+        background: #e2e8f0;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 240px;
+        border: 1px solid #cbd5e1;
+    }
+    .file-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 500;
+    }
+    .remove-file {
+        background: #f1f5f9;
+        border: none;
+        color: #64748b;
+        cursor: pointer;
+        font-size: 1.2rem;
+        padding: 0;
+        min-height: 24px;
+        width: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+    .remove-file:hover { background: #fee2e2; color: #dc2626; }
 
     /* Toggle Switch Styles */
     .toggle-field { margin-bottom: 16px; }
@@ -499,7 +799,7 @@
         width: 0;
         height: 0;
     }
-    .toggle-slider {
+    .toggle-slider-ui {
         position: relative;
         width: 44px;
         height: 24px;
@@ -508,7 +808,7 @@
         transition: background 0.2s;
         flex-shrink: 0;
     }
-    .toggle-slider::before {
+    .toggle-slider-ui::before {
         content: '';
         position: absolute;
         top: 2px;
@@ -520,9 +820,10 @@
         transition: transform 0.2s;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
-    .toggle-checkbox:checked + .toggle-slider { background: #2563eb; }
-    .toggle-checkbox:checked + .toggle-slider::before { transform: translateX(20px); }
+    .toggle-checkbox:checked + .toggle-slider-ui { background: #2563eb; }
+    .toggle-checkbox:checked + .toggle-slider-ui::before { transform: translateX(20px); }
     .toggle-description { font-size: 0.75rem; color: #64748b; margin-top: -8px; margin-bottom: 12px; }
+    
     input, select, textarea { 
         width: 100%;
         padding: 12px; 
@@ -540,10 +841,19 @@
 
     textarea { height: 100px; resize: vertical; }
     
-    .actions { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+    .actions { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
     
-    @media (min-width: 640px) {
-        .actions { flex-direction: row; }
+    .main-action {
+        font-size: 1.1rem;
+        padding: 16px;
+        background: #2563eb;
+        color: white;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1);
+    }
+    .action-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
     }
 
     button { 
@@ -554,7 +864,7 @@
         border-radius: 8px; 
         font-weight: 600; 
         cursor: pointer; 
-        transition: transform 0.1s, opacity 0.2s; 
+        transition: transform 0.1s, opacity 0.2s, background 0.2s; 
         font-size: 1rem;
     }
     button:active { transform: scale(0.98); }

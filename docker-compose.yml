@@ -3,6 +3,8 @@ services:
     build: .
     container_name: rhub-interface
     restart: unless-stopped
+    env_file:
+      - .env
     networks:
       - shared_net
     volumes:
