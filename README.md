@@ -1,15 +1,17 @@
 # rhub — RunningHub Precision Control Center
 
-> **Advanced RunningHub & FLUX.1-dev control center. Featuring AI-orchestrated prompt engineering from 300 photogenic locations, sequential batch queuing, image upscaling with LSB steganography support, and real-time polling.**
+> **Advanced image generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation (FLUX.1-dev via RunningHub and Z-Image via RunPod Serverless), sequential batch queuing, image upscaling with LSB steganography support, and real-time polling.**
 
-**rhub** is a specialized SvelteKit-based dashboard that transforms simple subject descriptions into high-quality, LoRA-consistent imagery. It solves the "repetition problem" in AI generation by bridging expert prompt engineering (Gemini/Qwen) with the FLUX.1-dev synthesis pipeline.
+**rhub** is a specialized SvelteKit-based dashboard that transforms simple subject descriptions into high-quality, LoRA-consistent imagery. It solves the "repetition problem" in AI generation by bridging expert prompt engineering (Gemini/Qwen) with multiple synthesis pipelines.
 
 ## Key Features
 
-- **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed FLUX.1-dev prompts via a 2-step process: location selection + AI composition.
+- **Multi-Model Generation** — Switch between **FLUX.1-dev** (RunningHub) and **Z-Image** (RunPod Serverless) from the Generate tab. The same AI prompt engineering pipeline feeds both models.
+- **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed prompts via a 2-step process: location selection + AI composition.
 - **Image Upscaling** — Batch upscale images to 2K resolution using specialized RunningHub workflows. Handles intermediary storage via S3 (e.g., Backblaze B2) with automatic presigned URL generation.
 - **LSB Steganography (TT-Decoder/Encoder)** — Built-in TypeScript support for both extracting hidden data from generated images and **embedding data into carrier images** for secure upscale processing.
-- **Persistent Sequential Queue** — Bypasses RunningHub’s single-task limitation with a robust client-side queue. Captures full form state (LoRA, Output Dir, API keys) per task, survives page refreshes, and processes jobs one-by-one.
+- **Persistent Sequential Queue** — Bypasses RunningHub's single-task limitation with a robust client-side queue. Captures full form state (LoRA, model, output dir, API keys) per task, survives page refreshes, and processes jobs one-by-one.
+- **Environment-backed API Keys** — API keys can be pre-configured in `.env` and are automatically used as defaults. UI fields override them on a per-session basis.
 - **Modern Tabbed UI** — Segmented control interface with smooth sliding indicators for seamless switching between Generation and Upscaling modes.
 - **300 Curated Locations** — Module-level Fisher-Yates shuffled queue of 300 unique locations ensures zero repetition across large batches.
 - **Flexible Dimensions** — 9 aspect ratio presets with automatic 16px-aligned dimension calculation.
@@ -19,20 +21,28 @@
 
 ![Architecture Diagram](./docs/diagrams/architecture.svg)
 
-The application runs as a single SvelteKit container. API routes handle server-side logic including AI prompt synthesis, S3 uploads, and RunningHub interaction. Images are served directly from a Docker-mounted volume to prevent caching issues and ensure persistence.
+The application runs as a single SvelteKit container. API routes handle server-side logic including AI prompt synthesis, S3 uploads, RunningHub interaction, and direct RunPod Serverless calls. Images are served directly from a Docker-mounted volume to prevent caching issues and ensure persistence.
 
 ## Data Flow
 
 ![Data Flow Diagram](./docs/diagrams/data-flow.svg)
 
-### Generation Flow
-1. User provides subject characteristics, LoRA URL, and API keys.
+### Generation Flow — FLUX.1-dev (RunningHub)
+1. User selects **FLUX.1-dev** model, provides subject characteristics, LoRA URL, and API keys.
 2. Tasks are added to the **Persistent Queue**.
 3. Background processor picks the next task:
     - AI selects a location and generates a vivid composition.
     - AI synthesizes the final detailed FLUX.1-dev prompt.
 4. Dimensions are calculated and the task is submitted to RunningHub.
-5. The client polls status, downloads the result, and optionally decodes hidden data.
+5. The client polls `/api/check` for status, downloads the result, and optionally decodes hidden data.
+
+### Generation Flow — Z-Image (RunPod Serverless)
+1. User selects **Z-Image** model and optionally sets negative prompt, inference steps, guidance scale, LoRA scale, and seed.
+2. Tasks are added to the **Persistent Queue** with the same AI prompt engineering pipeline.
+3. Background processor picks the next task:
+    - AI synthesizes the prompt (same Gemini/Qwen pipeline as FLUX.1-dev).
+4. Job is submitted to the RunPod Z-Image Serverless endpoint (`/run`).
+5. The client polls `/api/zimage-check` until the job completes, then downloads the JPG from the S3 URL returned by RunPod.
 
 ### Upscale Flow
 1. User uploads images via the **Upscale** tab.
@@ -40,7 +50,7 @@ The application runs as a single SvelteKit container. API routes handle server-s
     - If **TT-Decoder** toggle is ON: The image is encoded into a new carrier PNG using **TT-Encoder**.
     - The image (original or encoded) is uploaded to S3 storage.
     - A temporary presigned URL is generated and sent to the RunningHub 2K Upscale workflow.
-3. The client polls status and downloads the upscaled success result.
+3. The client polls status and downloads the upscaled result.
 
 ## Quick Start
 
@@ -48,7 +58,8 @@ The application runs as a single SvelteKit container. API routes handle server-s
 
 - [Docker](https://docs.docker.com/get-docker/) & Docker Compose
 - A [Google Gemini API key](https://aistudio.google.com/apikey) or a [RunPod API key](https://www.runpod.io/)
-- A [RunningHub API key](https://www.runninghub.ai/)
+- A [RunningHub API key](https://www.runninghub.ai/) (required for FLUX.1-dev and Upscaling)
+- A [RunPod API key](https://www.runpod.io/) (required for Z-Image and Qwen prompt provider)
 - **S3-compatible Storage** (Required for Upscaling) — e.g., [Backblaze B2](https://www.backblaze.com/cloud-storage).
 
 ### Run with Docker (Recommended)
@@ -60,38 +71,76 @@ cd rhub
 
 # Configure environment variables
 cp .env.example .env
-# Edit .env with your S3 credentials and body limits
+# Edit .env with your API keys, S3 credentials, and RunPod endpoints
 
 # Ensure the shared Docker network exists
 docker network create shared_net 2>/dev/null || true
 
 # Build and start
-docker compose up -d
+docker compose up -d --build
 ```
 
 ## Configuration
 
-| Setting | Where | Description |
-|---------|-------|-------------|
-| **AI Prompt Provider** | Web UI | Choose between Google Gemini or RunPod (Qwen 30B) |
-| **RunningHub API Key** | Web UI | Required. RunningHub API key for image synthesis |
-| **Enable TT-Decoder** | Web UI | Toggle LSB steganography decoding/encoding (persisted in localStorage) |
-| **S3_ENDPOINT** | `.env` | S3 API endpoint (e.g. `s3.us-west-004.backblazeb2.com`) |
-| **S3_BUCKET** | `.env` | Name of the bucket for intermediary image storage |
-| **S3_ACCESS_KEY_ID** | `.env` | S3 access key ID |
-| **S3_SECRET_ACCESS_KEY** | `.env` | S3 secret access key |
-| **BODY_SIZE_LIMIT** | `.env` | Maximum upload size in bytes (e.g., `52428800` for 50MB) |
+API keys can be set in `.env` (recommended for persistent use) or entered directly in the Web UI. **UI values override `.env` values.**
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `RUNNINGHUB_API_KEY` | For FLUX.1-dev & Upscaling | RunningHub API key |
+| `GEMINI_API_KEY` | For Gemini prompt provider | Google Gemini API key |
+| `RUNPOD_API_KEY` | For Z-Image & Qwen provider | RunPod API key |
+| `RUNPOD_ZIMAGE_ENDPOINT` | For Z-Image | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`) |
+| `S3_ENDPOINT` | For Upscaling | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
+| `S3_BUCKET` | For Upscaling | Name of the bucket for intermediary image storage |
+| `S3_ACCESS_KEY_ID` | For Upscaling | S3 access key ID |
+| `S3_SECRET_ACCESS_KEY` | For Upscaling | S3 secret access key |
+| `S3_REGION` | For Upscaling | S3 region (default: `us-east-1`) |
+| `BODY_SIZE_LIMIT` | Always | Maximum upload size in bytes (e.g., `52428800` for 50MB) |
+
+### Web UI Settings
+
+| Setting | Description |
+|---------|-------------|
+| **Generation Model** | Choose **FLUX.1-dev** (RunningHub) or **Z-Image** (RunPod Serverless) |
+| **AI Prompt Provider** | Choose between Google Gemini or RunPod (Qwen 30B) for prompt engineering |
+| **RunningHub API Key** | Overrides `RUNNINGHUB_API_KEY` env var for this session |
+| **Gemini API Key** | Overrides `GEMINI_API_KEY` env var for this session |
+| **RunPod API Key** | Overrides `RUNPOD_API_KEY` env var for this session |
+| **Enable TT-Decoder** | Toggle LSB steganography decoding/encoding (FLUX.1-dev only, persisted in localStorage) |
+
+### Generation Parameters
+
+| Parameter | Models | Default | Description |
+|-----------|--------|---------|-------------|
+| LoRA URL | Both | *(empty)* | URL to a `.safetensors` LoRA file |
+| LoRA Trigger Word | Both | *(empty)* | The exact trigger word the LoRA was trained on (e.g. `K1mScum`). Injected as a hard rule into both prompt engineering steps to ensure it appears in the final prompt. |
+| Negative Prompt | Z-Image | *(empty)* | Text describing what to avoid in the image |
+| Inference Steps | Z-Image | `30` | Number of diffusion steps (10–50) |
+| Guidance Scale | Z-Image | `3.5` | CFG scale — 3.0–4.5 recommended for likeness |
+| LoRA Scale | Z-Image | `0.9` | LoRA adapter strength (0.8–0.9 recommended) |
+| Seed | Z-Image | `-1` (random) | Fixed seed for reproducibility; -1 generates a random seed |
 
 ## API Reference
 
 ### `POST /api/generate`
-Submits an image generation job to RunningHub. Handles AI prompt engineering.
+Submits an image generation job. Handles AI prompt engineering via Gemini or RunPod Qwen, then routes to the selected model backend.
+
+- **FLUX.1-dev**: Submits to RunningHub workflow. Returns `{ taskId, model: 'flux-dev', prompt }`.
+- **Z-Image**: Submits to RunPod Serverless endpoint. Returns `{ jobId, model: 'z-image', prompt }`.
+
+### `POST /api/zimage-check`
+Polls a RunPod Z-Image job for completion. When the job completes, downloads the JPG from the S3 presigned URL and saves it to the output directory. Returns `{ status, filename }`.
 
 ### `POST /api/upscale`
-Handles multipart form uploads. Encodes images if requested, uploads to S3, and submits to specialized RunningHub upscaling workflows (`2022423075609907202` for encoded, `2022348592370950145` for direct).
+Handles multipart form uploads. Encodes images if requested, uploads to S3, and submits to specialized RunningHub upscaling workflows.
 
 ### `POST /api/check`
-Polls status and handles post-processing (download + TT-Decode).
+Polls RunningHub task status and handles post-processing (image download + optional TT-Decode).
+
+### `GET /api/images/[...path]`
+Serves generated/upscaled images from the mounted output volume.
 
 ## Project Structure
 
@@ -104,12 +153,17 @@ rhub/
 │   │   ├── s3.ts                     # S3 Client & Presigned URL logic
 │   │   └── locations.ts              # 300 photogenic locations
 │   └── routes/
-│       ├── +page.svelte              # Modern Tabbed UI (Runes)
+│       ├── +page.svelte              # Main UI (Runes) — Generate & Upscale tabs
+│       ├── +page.server.ts           # Server load — passes env-backed API keys to UI
 │       └── api/
+│           ├── generate/             # AI Synthesis + Multi-model Submission
+│           ├── zimage-check/         # RunPod Z-Image job polling + image download
 │           ├── upscale/              # Upload + Encoding + S3 Hosting
-│           └── generate/             # AI Synthesis + Submission
+│           ├── check/                # RunningHub task polling + TT-Decode
+│           └── images/               # Static file serving from /mount
 ├── .env.example                      # Template for secrets and limits
-├── Dockerfile                        # Multi-stage production build
+├── .env                              # Local secrets (gitignored)
+├── Dockerfile                        # Production build
 └── docker-compose.yml                # Container orchestration
 ```
 
@@ -118,6 +172,7 @@ rhub/
 - **Frontend**: Svelte 5 (Runes), TypeScript, SvelteKit
 - **Backend**: Node.js, AWS SDK (S3), pngjs
 - **AI**: Gemini 3 Flash / RunPod Qwen 30B
+- **Image Generation**: FLUX.1-dev (RunningHub) / Z-Image (RunPod Serverless)
 - **Infrastructure**: Docker, Docker Compose
 
 ## License

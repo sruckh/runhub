@@ -1,24 +1,38 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { env } from '$env/dynamic/private';
 import { GoogleGenAI } from '@google/genai';
 import { getNextLocation } from '$lib/locations';
 
+const RUNPOD_ZIMAGE_ENDPOINT_DEFAULT = 'https://api.runpod.ai/v2/j7rrb3raom3lzh';
+
 export const POST: RequestHandler = async ({ request }) => {
     const {
+        model = 'flux-dev',
         loraUrl,
         subject,
         aspectRatio,
-        geminiKey,
-        rhubKey,
+        geminiKey: userGeminiKey,
+        rhubKey: userRhubKey,
         runpodKey: userRunpodKey,
         promptProvider = 'gemini',
         useTtDecoder = false,
         customPrompt = '',
-        useCustomPrompt = false
+        useCustomPrompt = false,
+        // Shared extra params
+        loraKeyword = '',
+        // Z-Image extra params
+        negativePrompt = '',
+        steps = 30,
+        guidanceScale = 3.5,
+        seed = -1,
+        loraScale = 0.9,
     } = await request.json();
 
-    // Use user-provided RunPod key (no fallback to env var)
-    const runpodKey = userRunpodKey;
+    // Resolve keys: user input overrides env vars
+    const geminiKey = userGeminiKey || env.GEMINI_API_KEY || '';
+    const rhubKey = userRhubKey || env.RUNNINGHUB_API_KEY || '';
+    const runpodKey = userRunpodKey || env.RUNPOD_API_KEY || '';
 
     if (!useCustomPrompt) {
         if (promptProvider === 'gemini' && !geminiKey) {
@@ -28,9 +42,12 @@ export const POST: RequestHandler = async ({ request }) => {
             return json({ error: 'RunPod API Key is required' }, { status: 400 });
         }
     }
-    
-    if (!rhubKey) {
-        return json({ error: 'RunningHub API Key is required' }, { status: 400 });
+
+    if (model === 'flux-dev' && !rhubKey) {
+        return json({ error: 'RunningHub API Key is required for FLUX.1-dev' }, { status: 400 });
+    }
+    if (model === 'z-image' && !runpodKey) {
+        return json({ error: 'RunPod API Key is required for Z-Image' }, { status: 400 });
     }
 
     try {
@@ -41,22 +58,19 @@ export const POST: RequestHandler = async ({ request }) => {
                 return json({ error: 'Custom prompt is required when "Use Custom Prompt" is enabled' }, { status: 400 });
             }
             finalPrompt = customPrompt.trim();
-            console.log('Using CUSTOM PROMPT (Directly to RunningHub):', finalPrompt);
+            console.log('Using CUSTOM PROMPT:', finalPrompt);
         } else {
             if (!subject.trim()) {
                 return json({ error: 'Subject characteristics are required for AI prompt engineering' }, { status: 400 });
             }
-            // Helper for AI calls
-            async function askAI(system: string, user: string, temperature = 1.0) {
+
+            const askAI = async (system: string, user: string, temperature = 1.0): Promise<string> => {
                 if (promptProvider === 'gemini') {
                     const ai = new GoogleGenAI({ apiKey: geminiKey });
                     const response = await ai.models.generateContent({
                         model: 'gemini-3-flash-preview',
                         contents: user,
-                        config: {
-                            systemInstruction: system,
-                            temperature
-                        }
+                        config: { systemInstruction: system, temperature }
                     });
                     return (response.text || '').trim();
                 } else {
@@ -79,7 +93,7 @@ export const POST: RequestHandler = async ({ request }) => {
                     if (data.status === 'COMPLETED') return data.output.result.choices[0].message.content.trim();
                     throw new Error('RunPod call failed');
                 }
-            }
+            };
 
             // STEP 1: Pick location from curated pool (true randomness, no AI bias)
             const location = getNextLocation();
@@ -96,7 +110,7 @@ Rules:
 - Describe specific clothing that fits the location and mood.
 - Include time of day and lighting quality.
 Location: ${location}
-Subject: ${subject}`,
+Subject: ${loraKeyword ? `${loraKeyword} — ` : ''}${subject}`,
                 "Describe the scene in 2-3 vivid sentences: composition, activity, clothing, and lighting.",
                 1.3
             );
@@ -111,9 +125,9 @@ RULES:
 2. FORBIDDEN: "leather jacket", "neon lights", "nightclub", "flash photography", "brick wall", "bokeh".
 3. Focus on authentic everyday realism: natural textures, real fabrics, ambient lighting.
 4. Include specific details: fabric types, colors, accessories, environment textures.
-5. Output format: PROMPT: <single detailed prompt here>`;
+5. Output format: PROMPT: <single detailed prompt here>${loraKeyword ? `\n6. You MUST include the exact trigger word "${loraKeyword}" in the prompt as the subject's name/identifier — do not paraphrase or omit it.` : ''}`;
 
-            const finalUserMessage = `Subject: ${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate one detailed, unique FLUX prompt.`;
+            const finalUserMessage = `Subject: ${loraKeyword ? `${loraKeyword} — ` : ''}${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate one detailed, unique FLUX prompt.`;
 
             const responseText = await askAI(finalSystemPrompt, finalUserMessage, 1.0);
             const promptMatch = responseText.match(/PROMPT:\s*(.*)/is);
@@ -122,6 +136,39 @@ RULES:
 
         const { width, height } = calculateDimensions(aspectRatio);
 
+        // ── Z-Image via RunPod Serverless ──────────────────────────────────────
+        if (model === 'z-image') {
+            const endpointUrl = env.RUNPOD_ZIMAGE_ENDPOINT || RUNPOD_ZIMAGE_ENDPOINT_DEFAULT;
+            const effectiveSeed = seed === -1 ? Math.floor(Math.random() * 1000000000) : seed;
+
+            console.log(`[Z-Image] Submitting: "${finalPrompt.substring(0, 80)}..." seed=${effectiveSeed}`);
+
+            const zimageRes = await fetch(`${endpointUrl}/run`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${runpodKey}` },
+                body: JSON.stringify({
+                    input: {
+                        prompt: finalPrompt,
+                        ...(loraUrl ? { lora_url: loraUrl } : {}),
+                        negative_prompt: negativePrompt,
+                        width,
+                        height,
+                        steps,
+                        guidance_scale: guidanceScale,
+                        seed: effectiveSeed,
+                        lora_scale: loraScale,
+                    }
+                })
+            });
+
+            const zimageData = await zimageRes.json();
+            if (!zimageData.id) throw new Error(`RunPod submission failed: ${JSON.stringify(zimageData)}`);
+            console.log(`[Z-Image] Job queued: ${zimageData.id}`);
+
+            return json({ jobId: zimageData.id, model: 'z-image', prompt: finalPrompt });
+        }
+
+        // ── FLUX.1-dev via RunningHub ──────────────────────────────────────────
         const rhubPayload = {
             nodeInfoList: [
                 { nodeId: "4", fieldName: "text", fieldValue: finalPrompt },
@@ -145,7 +192,7 @@ RULES:
         const submitData = await rhubResponse.json();
         if (!submitData.taskId) throw new Error(`RunningHub submission failed: ${JSON.stringify(submitData)}`);
 
-        return json({ taskId: submitData.taskId, prompt: finalPrompt });
+        return json({ taskId: submitData.taskId, model: 'flux-dev', prompt: finalPrompt });
 
     } catch (err: any) {
         console.error('Generation init error:', err);

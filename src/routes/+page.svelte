@@ -1,7 +1,10 @@
 <script lang="ts">
     import { onMount } from 'svelte';
 
+    let { data } = $props();
+
     let loraUrl = $state('');
+    let loraKeyword = $state('');
     let subject = $state('');
     let customPrompt = $state('');
     let useCustomPrompt = $state(false);
@@ -9,10 +12,18 @@
     let outputDir = $state('generations');
     let prefix = $state('image');
     let aspectRatio = $state('1:1');
-    let geminiKey = $state('');
-    let rhubKey = $state('');
-    let runpodKey = $state('');
+    let geminiKey = $state(data.envKeys?.geminiKey || '');
+    let rhubKey = $state(data.envKeys?.rhubKey || '');
+    let runpodKey = $state(data.envKeys?.runpodKey || '');
     let promptProvider = $state('gemini');
+    let model = $state('flux-dev'); // 'flux-dev' | 'z-image'
+
+    // Z-Image extra params
+    let negativePrompt = $state('');
+    let zimageSteps = $state(30);
+    let guidanceScale = $state(3.5);
+    let zimageSeed = $state(-1);
+    let loraScale = $state(0.9);
     // Load persisted settings
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
     let useTtDecoder = $state(savedTtDecoder);
@@ -76,7 +87,9 @@
     async function addToQueue() {
         const baseTask = {
             type: 'generate',
+            model,
             loraUrl,
+            loraKeyword,
             subject,
             customPrompt,
             useCustomPrompt,
@@ -88,6 +101,11 @@
             useTtDecoder,
             outputDir,
             prefix,
+            negativePrompt,
+            steps: zimageSteps,
+            guidanceScale,
+            seed: zimageSeed,
+            loraScale,
             createdAt: new Date().toISOString()
         };
 
@@ -197,10 +215,13 @@
             const data = await response.json();
             if (data.error) throw new Error(data.error);
 
-            const taskId = data.taskId;
-            updateResult(resultId, { status: 'PROCESSING', prompt: data.prompt, taskId });
+            updateResult(resultId, { status: 'PROCESSING', prompt: data.prompt });
 
-            await pollTask(resultId, taskId, payload);
+            if (data.model === 'z-image') {
+                await pollZimageTask(resultId, data.jobId, payload);
+            } else {
+                await pollTask(resultId, data.taskId, payload);
+            }
 
         } catch (e: any) {
             updateResult(resultId, { status: 'FAILED', error: e.message });
@@ -273,6 +294,37 @@
             await new Promise(r => setTimeout(r, 5000));
         }
         
+        if (isCancelled && results.find(r => r.id === resultId)?.status !== 'SUCCESS') {
+            updateResult(resultId, { status: 'CANCELLED', error: 'Operation cancelled' });
+        }
+    }
+
+    async function pollZimageTask(resultId: string, jobId: string, payload: any) {
+        const { runpodKey: taskRunpodKey, outputDir: taskOutputDir, prefix: taskPrefix } = payload;
+
+        while (!isCancelled) {
+            try {
+                const response = await fetch('/api/zimage-check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jobId, runpodKey: taskRunpodKey, outputDir: taskOutputDir, prefix: taskPrefix })
+                });
+                const data = await response.json();
+
+                if (data.status === 'SUCCESS') {
+                    updateResult(resultId, { status: 'SUCCESS', filename: data.filename, ts: Date.now() });
+                    break;
+                } else if (data.status === 'FAILED') {
+                    updateResult(resultId, { status: 'FAILED', error: data.error });
+                    break;
+                }
+            } catch (e: any) {
+                updateResult(resultId, { status: 'FAILED', error: 'Polling error: ' + e.message });
+                break;
+            }
+            await new Promise(r => setTimeout(r, 5000));
+        }
+
         if (isCancelled && results.find(r => r.id === resultId)?.status !== 'SUCCESS') {
             updateResult(resultId, { status: 'CANCELLED', error: 'Operation cancelled' });
         }
@@ -376,10 +428,20 @@
             {#if activeTab === 'generate'}
                 <div class="settings-header">
                     <h2>Generation Settings</h2>
-                    <span class="settings-badge">FLUX.1-dev</span>
+                    <span class="settings-badge">{model === 'z-image' ? 'Z-Image' : 'FLUX.1-dev'}</span>
                 </div>
 
-                <!-- TT-Decoder Toggle -->
+                <!-- Model Selector -->
+                <div class="field">
+                    <label for="genModel">Generation Model</label>
+                    <select id="genModel" bind:value={model}>
+                        <option value="flux-dev">FLUX.1-dev — RunningHub</option>
+                        <option value="z-image">Z-Image — RunPod Serverless</option>
+                    </select>
+                </div>
+
+                <!-- TT-Decoder Toggle (FLUX.1-dev only) -->
+                {#if model === 'flux-dev'}
                 <div class="field toggle-field">
                     <label for="useTtDecoder" class="toggle-label">
                         <span class="toggle-text">Enable TT-Decoder</span>
@@ -388,11 +450,19 @@
                     </label>
                     <p class="toggle-description">Decode hidden files from returned images (LSB steganography)</p>
                 </div>
-                <div class="field">
-                    <label for="loraUrl">LoRA URL</label>
-                    <input type="text" id="loraUrl" bind:value={loraUrl} placeholder="https://..." />
+                {/if}
+
+                <div class="grid">
+                    <div class="field">
+                        <label for="loraUrl">LoRA URL</label>
+                        <input type="text" id="loraUrl" bind:value={loraUrl} placeholder="https://..." />
+                    </div>
+                    <div class="field">
+                        <label for="loraKeyword">LoRA Trigger Word</label>
+                        <input type="text" id="loraKeyword" bind:value={loraKeyword} placeholder="e.g. K1mScum" />
+                    </div>
                 </div>
-                
+
                 <!-- Custom Prompt Toggle -->
                 <div class="field toggle-field">
                     <label for="useCustomPrompt" class="toggle-label">
@@ -429,6 +499,31 @@
                         </select>
                     </div>
                 </div>
+
+                {#if model === 'z-image'}
+                    <div class="field">
+                        <label for="negativePrompt">Negative Prompt</label>
+                        <textarea id="negativePrompt" bind:value={negativePrompt} placeholder="What to avoid in the image..."></textarea>
+                    </div>
+                    <div class="grid">
+                        <div class="field">
+                            <label for="zimageSteps">Inference Steps</label>
+                            <input type="number" id="zimageSteps" bind:value={zimageSteps} min="10" max="50" />
+                        </div>
+                        <div class="field">
+                            <label for="guidanceScale">Guidance Scale</label>
+                            <input type="number" id="guidanceScale" bind:value={guidanceScale} min="1" max="10" step="0.1" />
+                        </div>
+                        <div class="field">
+                            <label for="loraScale">LoRA Scale</label>
+                            <input type="number" id="loraScale" bind:value={loraScale} min="0" max="1" step="0.05" />
+                        </div>
+                        <div class="field">
+                            <label for="zimageSeed">Seed (−1 = random)</label>
+                            <input type="number" id="zimageSeed" bind:value={zimageSeed} min="-1" />
+                        </div>
+                    </div>
+                {/if}
             {:else}
                 <div class="settings-header">
                     <h2>Upscale Settings</h2>
@@ -487,7 +582,7 @@
 
         <div class="actions">
             <button class="btn-primary main-action" onclick={handleSubmit}>
-                {activeTab === 'generate' ? 'Add Generation to Queue' : 'Add Upscale to Queue'}
+                {activeTab === 'generate' ? (model === 'z-image' ? 'Add Z-Image to Queue' : 'Add Generation to Queue') : 'Add Upscale to Queue'}
             </button>
             <div class="action-grid">
                 {#if loading}
@@ -516,7 +611,7 @@
                 {#each queue as task (task.id)}
                     <div class="queue-item">
                         <div class="queue-info">
-                            <span class="queue-tag">{task.type === 'upscale' ? 'UPSCALE' : task.aspectRatio}</span>
+                            <span class="queue-tag">{task.type === 'upscale' ? 'UPSCALE' : task.model === 'z-image' ? `Z-IMG ${task.aspectRatio}` : task.aspectRatio}</span>
                             <span class="queue-prompt">
                                 {#if task.type === 'upscale'}
                                     {task.fileName}

@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { env } from '$env/dynamic/private';
 import fs from 'fs/promises';
 import path from 'path';
 import { decodeImage } from '$lib/tt-decoder';
@@ -7,7 +8,8 @@ import { decodeImage } from '$lib/tt-decoder';
 const MOUNT_PATH = '/mount';
 
 export const POST: RequestHandler = async ({ request }) => {
-    const { taskId, rhubKey, outputDir, prefix, useTtDecoder = false } = await request.json();
+    const { taskId, rhubKey: userRhubKey, outputDir, prefix, useTtDecoder = false } = await request.json();
+    const rhubKey = userRhubKey || env.RUNNINGHUB_API_KEY || '';
 
     try {
         console.log(`Checking status for TaskID: ${taskId}`);

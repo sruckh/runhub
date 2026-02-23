@@ -8,7 +8,8 @@ export const POST: RequestHandler = async ({ request }) => {
     try {
         const formData = await request.formData();
         const image = formData.get('image') as File;
-        const rhubKey = formData.get('rhubKey') as string;
+        const userRhubKey = formData.get('rhubKey') as string;
+        const rhubKey = userRhubKey || env.RUNNINGHUB_API_KEY || '';
         const useTtDecoder = formData.get('useTtDecoder') === 'true';
         
         // S3 Config from Environment Variables
