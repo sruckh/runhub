@@ -24,6 +24,13 @@
     let guidanceScale = $state(3.5);
     let zimageSeed = $state(-1);
     let loraScale = $state(0.9);
+
+    // Z-Image second pass params
+    let secondPassEnabled = $state(false);
+    let secondPassUpscale = $state(1.5);
+    let secondPassStrength = $state(0.18);
+    let secondPassGuidanceScale = $state(1.2);
+
     // Load persisted settings
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
     let useTtDecoder = $state(savedTtDecoder);
@@ -106,6 +113,10 @@
             guidanceScale,
             seed: zimageSeed,
             loraScale,
+            second_pass_enabled: secondPassEnabled,
+            second_pass_upscale: secondPassUpscale,
+            second_pass_strength: secondPassStrength,
+            second_pass_guidance_scale: secondPassGuidanceScale,
             createdAt: new Date().toISOString()
         };
 
@@ -600,6 +611,33 @@
                             <input type="number" id="zimageSeed" bind:value={zimageSeed} min="-1" />
                         </div>
                     </div>
+
+                    <!-- Second Pass Options -->
+                    <div class="field toggle-field" style="margin-top: 12px;">
+                        <label for="secondPassEnabled" class="toggle-label">
+                            <span class="toggle-text">Enable High-Res Refinement</span>
+                            <input type="checkbox" id="secondPassEnabled" bind:checked={secondPassEnabled} class="toggle-checkbox" />
+                            <span class="toggle-slider-ui"></span>
+                        </label>
+                        <p class="toggle-description">Runs a second pass for extra detail and upscaling</p>
+                    </div>
+
+                    {#if secondPassEnabled}
+                        <div class="grid second-pass-params">
+                            <div class="field">
+                                <label for="secondPassUpscale">Upscale Factor</label>
+                                <input type="number" id="secondPassUpscale" bind:value={secondPassUpscale} min="1" max="4" step="0.1" />
+                            </div>
+                            <div class="field">
+                                <label for="secondPassStrength">Denoising Strength</label>
+                                <input type="number" id="secondPassStrength" bind:value={secondPassStrength} min="0.01" max="1" step="0.01" />
+                            </div>
+                            <div class="field">
+                                <label for="secondPassGuidanceScale">Pass 2 Guidance</label>
+                                <input type="number" id="secondPassGuidanceScale" bind:value={secondPassGuidanceScale} min="1" max="5" step="0.1" />
+                            </div>
+                        </div>
+                    {/if}
                 {/if}
             {:else}
                 <div class="settings-header">

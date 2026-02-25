@@ -27,6 +27,11 @@ export const POST: RequestHandler = async ({ request }) => {
         guidanceScale = 3.5,
         seed = -1,
         loraScale = 0.9,
+        // Z-Image second pass params
+        second_pass_enabled = false,
+        second_pass_upscale = 1.5,
+        second_pass_strength = 0.18,
+        second_pass_guidance_scale = 1.2,
     } = await request.json();
 
     // Resolve keys: user input overrides env vars
@@ -157,6 +162,10 @@ RULES:
                         guidance_scale: guidanceScale,
                         seed: effectiveSeed,
                         lora_scale: loraScale,
+                        second_pass_enabled,
+                        second_pass_upscale,
+                        second_pass_strength,
+                        second_pass_guidance_scale,
                     }
                 })
             });
