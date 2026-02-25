@@ -344,8 +344,85 @@
         }
     }
 
+    function isImageFilename(filename?: string) {
+        if (!filename) return false;
+        const fileExt = filename.split('.').pop()?.toLowerCase();
+        return ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fileExt || '');
+    }
+
+    function encodePathSegments(pathValue: string) {
+        return pathValue
+            .split('/')
+            .filter(Boolean)
+            .map((segment) => encodeURIComponent(segment))
+            .join('/');
+    }
+
+    function getResultFilePath(res: any) {
+        const resultOutputDir = typeof res.outputDir === 'string' && res.outputDir.trim() ? res.outputDir : outputDir;
+        const dirPart = encodePathSegments(resultOutputDir);
+        const namePart = encodeURIComponent(res.filename || '');
+        return [dirPart, namePart].filter(Boolean).join('/');
+    }
+
+    function getResultFileUrl(res: any) {
+        return `/api/images/${getResultFilePath(res)}?t=${res.ts || ''}`;
+    }
+
+    function removeResultCard(id: string) {
+        results = results.filter((r) => r.id !== id);
+    }
+
     function openFullScreen(url: string) {
         selectedImage = url;
+    }
+
+    async function copyPrompt(prompt: string) {
+        if (!prompt) return;
+        try {
+            await navigator.clipboard.writeText(prompt);
+            showToast('Prompt copied');
+        } catch (e) {
+            showToast('Could not copy prompt');
+        }
+    }
+
+    async function sendToUpscale(res: any) {
+        if (!res.filename || !isImageFilename(res.filename)) {
+            showToast('Only image results can be upscaled');
+            return;
+        }
+
+        try {
+            const response = await fetch(getResultFileUrl(res));
+            if (!response.ok) throw new Error('Failed to load image');
+            const blob = await response.blob();
+            const file = new File([blob], res.filename, { type: blob.type || 'image/png' });
+            upscaleFiles = [...upscaleFiles, file];
+            activeTab = 'upscale';
+            showToast('Image added to upscale workflow');
+        } catch (e) {
+            showToast('Failed to add image to upscale workflow');
+        }
+    }
+
+    async function deleteResult(res: any) {
+        if (!res.filename) {
+            removeResultCard(res.id);
+            showToast('Card removed');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/images/${getResultFilePath(res)}`, { method: 'DELETE' });
+            if (!response.ok && response.status !== 404) {
+                throw new Error('Delete failed');
+            }
+            removeResultCard(res.id);
+            showToast('Image deleted');
+        } catch (e) {
+            showToast('Failed to delete image');
+        }
     }
 
     function handleFileSelect(e: Event) {
@@ -634,6 +711,9 @@
             <h2>Live Results {#if loading}<span class="loader-dots">...</span>{/if}</h2>
             <div class="results-list">
                 {#each results as res (res.id)}
+                    {@const hasFile = Boolean(res.filename)}
+                    {@const isImageResult = hasFile && isImageFilename(res.filename)}
+                    {@const fileUrl = hasFile ? getResultFileUrl(res) : ''}
                     <div class="result-item">
                         <div class="result-header">
                             <span class="status-badge {res.status.toLowerCase()}">{res.status}</span>
@@ -647,12 +727,12 @@
                                 {#if res.status === 'SUCCESS'}
                                     {@const fileExt = res.filename?.split('.').pop()?.toLowerCase()}
                                     {#if ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fileExt)}
-                                        <button class="img-container" onclick={() => openFullScreen(`/api/images/${res.outputDir || outputDir}/${res.filename}?t=${res.ts || ''}`)}>
-                                            <img src="/api/images/{res.outputDir || outputDir}/{res.filename}?t={res.ts || ''}" alt="Generated" />
+                                        <button class="img-container" onclick={() => openFullScreen(fileUrl)}>
+                                            <img src={fileUrl} alt="Generated" />
                                             <div class="img-overlay">Click to Enlarge</div>
                                         </button>
                                     {:else}
-                                        <a class="file-download" href={`/api/images/${res.outputDir || outputDir}/${res.filename}?t=${res.ts || ''}`} download={res.filename}>
+                                        <a class="file-download" href={fileUrl} download={res.filename}>
                                             <div class="file-icon">📄</div>
                                             <div class="file-info">
                                                 <span class="file-name">{res.filename}</span>
@@ -673,6 +753,40 @@
                                 {#if res.error}
                                     <p class="error-text">{res.error}</p>
                                 {/if}
+                                <div class="result-actions">
+                                    <button
+                                        class="result-action-btn"
+                                        onclick={() => openFullScreen(fileUrl)}
+                                        disabled={!isImageResult}
+                                    >
+                                        Full Screen
+                                    </button>
+                                    {#if hasFile}
+                                        <a class="result-action-btn" href={fileUrl} download={res.filename}>Save Image</a>
+                                    {:else}
+                                        <span class="result-action-btn disabled-link">Save Image</span>
+                                    {/if}
+                                    <button
+                                        class="result-action-btn"
+                                        onclick={() => copyPrompt(res.prompt || '')}
+                                        disabled={!res.prompt}
+                                    >
+                                        Copy Prompt
+                                    </button>
+                                    <button
+                                        class="result-action-btn"
+                                        onclick={() => sendToUpscale(res)}
+                                        disabled={!isImageResult}
+                                    >
+                                        Send to Upscale
+                                    </button>
+                                    <button
+                                        class="result-action-btn danger"
+                                        onclick={() => deleteResult(res)}
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1012,6 +1126,38 @@
     .prompt-label { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
     .prompt-display textarea { width: 100%; height: 100px; background: #f8fafc; border: 1px solid #f1f5f9; font-size: 0.85rem; }
     .error-text { color: #dc2626; font-size: 0.8rem; margin-top: 8px; }
+    .result-actions {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .result-action-btn {
+        width: auto;
+        min-height: 36px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        background: white;
+        color: #334155;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .result-action-btn:disabled,
+    .result-action-btn.disabled-link {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    .result-action-btn.danger {
+        background: #fee2e2;
+        border-color: #fecaca;
+        color: #b91c1c;
+    }
 
     /* Queue Styles */
     .queue-section { border-left: 4px solid #2563eb; }

@@ -4,14 +4,18 @@ import fs from 'fs/promises';
 import path from 'path';
 
 const MOUNT_PATH = '/mount';
+const MOUNT_ROOT = path.resolve(MOUNT_PATH);
 
-export const GET: RequestHandler = async ({ params }) => {
-    const filePath = path.join(MOUNT_PATH, params.path || '');
-    
-    // Security check: ensure the path is inside MOUNT_PATH
-    if (!filePath.startsWith(MOUNT_PATH)) {
+function resolveSafePath(rawPath: string) {
+    const filePath = path.resolve(MOUNT_ROOT, rawPath || '');
+    if (filePath !== MOUNT_ROOT && !filePath.startsWith(`${MOUNT_ROOT}${path.sep}`)) {
         throw error(403, 'Forbidden');
     }
+    return filePath;
+}
+
+export const GET: RequestHandler = async ({ params }) => {
+    const filePath = resolveSafePath(params.path || '');
 
     try {
         const fileContent = await fs.readFile(filePath);
@@ -50,5 +54,19 @@ export const GET: RequestHandler = async ({ params }) => {
         return new Response(fileContent, { headers });
     } catch (e) {
         throw error(404, 'File not found');
+    }
+};
+
+export const DELETE: RequestHandler = async ({ params }) => {
+    const filePath = resolveSafePath(params.path || '');
+
+    try {
+        await fs.unlink(filePath);
+        return new Response(null, { status: 204 });
+    } catch (e: any) {
+        if (e?.code === 'ENOENT') {
+            throw error(404, 'File not found');
+        }
+        throw error(500, 'Failed to delete file');
     }
 };
