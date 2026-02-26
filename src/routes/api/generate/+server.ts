@@ -34,6 +34,12 @@ export const POST: RequestHandler = async ({ request }) => {
         second_pass_upscale = 1.5,
         second_pass_strength = 0.18,
         second_pass_guidance_scale = 1.2,
+        // FLUX.2-klein 2nd pass / upscale params
+        klein_enable_2nd_pass = false,
+        klein_second_pass_strength = 0.35,
+        klein_second_pass_steps = 20,
+        klein_enable_upscale = false,
+        klein_upscale_factor = 2.0,
     } = await request.json();
 
     // Resolve keys: user input overrides env vars
@@ -368,7 +374,16 @@ RULES:
                         seed: effectiveSeed,
                         lora_scale: loraScale,
                         output_format: 'jpeg',
-                        return_type: 's3'
+                        return_type: 's3',
+                        ...(klein_enable_2nd_pass ? {
+                            enable_2nd_pass: true,
+                            second_pass_strength: klein_second_pass_strength,
+                            second_pass_steps: klein_second_pass_steps,
+                        } : {}),
+                        ...(klein_enable_upscale ? {
+                            enable_upscale: true,
+                            upscale_factor: klein_upscale_factor,
+                        } : {}),
                     }
                 })
             });

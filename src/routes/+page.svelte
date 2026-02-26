@@ -32,6 +32,13 @@
     let secondPassStrength = $state(0.18);
     let secondPassGuidanceScale = $state(1.2);
 
+    // FLUX.2-klein 2nd pass / upscale params
+    let kleinEnable2ndPass = $state(false);
+    let kleinSecondPassStrength = $state(0.35);
+    let kleinSecondPassSteps = $state(20);
+    let kleinEnableUpscale = $state(false);
+    let kleinUpscaleFactor = $state(2.0);
+
     // Load persisted settings
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
     let useTtDecoder = $state(savedTtDecoder);
@@ -126,6 +133,11 @@
             second_pass_upscale: secondPassUpscale,
             second_pass_strength: secondPassStrength,
             second_pass_guidance_scale: secondPassGuidanceScale,
+            klein_enable_2nd_pass: kleinEnable2ndPass,
+            klein_second_pass_strength: kleinSecondPassStrength,
+            klein_second_pass_steps: kleinSecondPassSteps,
+            klein_enable_upscale: kleinEnableUpscale,
+            klein_upscale_factor: kleinUpscaleFactor,
             createdAt: new Date().toISOString()
         };
 
@@ -635,6 +647,50 @@
                             <input type="number" id="zimageSeed" bind:value={zimageSeed} min="-1" />
                         </div>
                     </div>
+
+                    {#if model === 'flux-klein'}
+                        <!-- Detail Refinement (2nd Pass) -->
+                        <div class="field toggle-field" style="margin-top: 12px;">
+                            <label for="kleinEnable2ndPass" class="toggle-label">
+                                <span class="toggle-text">Enable Detail Refinement</span>
+                                <input type="checkbox" id="kleinEnable2ndPass" bind:checked={kleinEnable2ndPass} class="toggle-checkbox" />
+                                <span class="toggle-slider-ui"></span>
+                            </label>
+                            <p class="toggle-description">Runs a second inference pass to sharpen fine details and textures</p>
+                        </div>
+
+                        {#if kleinEnable2ndPass}
+                            <div class="grid second-pass-params">
+                                <div class="field">
+                                    <label for="kleinSecondPassStrength">Refinement Strength</label>
+                                    <input type="number" id="kleinSecondPassStrength" bind:value={kleinSecondPassStrength} min="0.01" max="1" step="0.01" />
+                                </div>
+                                <div class="field">
+                                    <label for="kleinSecondPassSteps">Refinement Steps</label>
+                                    <input type="number" id="kleinSecondPassSteps" bind:value={kleinSecondPassSteps} min="5" max="50" />
+                                </div>
+                            </div>
+                        {/if}
+
+                        <!-- Upscaling -->
+                        <div class="field toggle-field" style="margin-top: 8px;">
+                            <label for="kleinEnableUpscale" class="toggle-label">
+                                <span class="toggle-text">Enable Upscaling</span>
+                                <input type="checkbox" id="kleinEnableUpscale" bind:checked={kleinEnableUpscale} class="toggle-checkbox" />
+                                <span class="toggle-slider-ui"></span>
+                            </label>
+                            <p class="toggle-description">Upscale the generated image server-side before delivery</p>
+                        </div>
+
+                        {#if kleinEnableUpscale}
+                            <div class="grid second-pass-params">
+                                <div class="field">
+                                    <label for="kleinUpscaleFactor">Upscale Factor</label>
+                                    <input type="number" id="kleinUpscaleFactor" bind:value={kleinUpscaleFactor} min="1.5" max="4" step="0.5" />
+                                </div>
+                            </div>
+                        {/if}
+                    {/if}
 
                     {#if model === 'z-image'}
                         <!-- Second Pass Options -->
