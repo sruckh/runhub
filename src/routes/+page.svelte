@@ -1,7 +1,10 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, untrack } from 'svelte';
 
     let { data } = $props();
+
+    // untrack: read env-backed defaults once at init without reactive tracking
+    const { geminiKey: _gk = '', rhubKey: _rk = '', runpodKey: _rpk = '' } = untrack(() => data.envKeys ?? {});
 
     let loraUrl = $state('');
     let loraKeyword = $state('');
@@ -12,9 +15,9 @@
     let outputDir = $state('generations');
     let prefix = $state('image');
     let aspectRatio = $state('1:1');
-    let geminiKey = $state(data.envKeys?.geminiKey || '');
-    let rhubKey = $state(data.envKeys?.rhubKey || '');
-    let runpodKey = $state(data.envKeys?.runpodKey || '');
+    let geminiKey = $state(_gk);
+    let rhubKey = $state(_rk);
+    let runpodKey = $state(_rpk);
     let promptProvider = $state('gemini');
     let model = $state('flux-dev'); // 'flux-dev' | 'flux-klein' | 'z-image'
 
@@ -50,7 +53,7 @@
 
     // Upscale states
     let upscaleFiles = $state<File[]>([]);
-    let fileInput: HTMLInputElement;
+    let fileInput = $state<HTMLInputElement | null>(null);
     const upscaleFilesMap = new Map<string, File>();
 
     // Persist setting changes and queue
@@ -736,11 +739,11 @@
                 </div>
 
                 <div class="field">
-                    <label>Upload Images</label>
-                    <div 
-                        class="drop-zone" 
-                        onclick={() => fileInput.click()} 
-                        onkeydown={(e) => e.key === 'Enter' && fileInput.click()}
+                    <label for="fileUploadInput">Upload Images</label>
+                    <div
+                        class="drop-zone"
+                        onclick={() => fileInput?.click()}
+                        onkeydown={(e) => e.key === 'Enter' && fileInput?.click()}
                         role="button"
                         tabindex="0"
                         ondragover={(e) => { e.preventDefault(); e.currentTarget.classList.add('dragover'); }}
@@ -749,7 +752,7 @@
                     >
                         <span class="drop-icon">📤</span>
                         <span class="drop-text">Click to upload or drag & drop</span>
-                        <input type="file" multiple accept="image/*" bind:this={fileInput} onchange={handleFileSelect} hidden />
+                        <input id="fileUploadInput" type="file" multiple accept="image/*" bind:this={fileInput} onchange={handleFileSelect} hidden />
                     </div>
                     
                     {#if upscaleFiles.length > 0}
