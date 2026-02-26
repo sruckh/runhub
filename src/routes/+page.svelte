@@ -16,14 +16,15 @@
     let rhubKey = $state(data.envKeys?.rhubKey || '');
     let runpodKey = $state(data.envKeys?.runpodKey || '');
     let promptProvider = $state('gemini');
-    let model = $state('flux-dev'); // 'flux-dev' | 'z-image'
+    let model = $state('flux-dev'); // 'flux-dev' | 'flux-klein' | 'z-image'
 
-    // Z-Image extra params
-    let negativePrompt = $state('');
-    let zimageSteps = $state(30);
-    let guidanceScale = $state(3.5);
+    // Z-Image / FLUX.2-klein extra params
+    let zimageSteps = $state(35);
+    let guidanceScale = $state(2.5);
     let zimageSeed = $state(-1);
-    let loraScale = $state(0.9);
+    let loraScale = $state(0.85);
+    let shift = $state(1.5);
+    let preset = $state('realistic_character');
 
     // Z-Image second pass params
     let secondPassEnabled = $state(false);
@@ -82,6 +83,13 @@
     });
 
     const aspectRatios = ['1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4'];
+    const kleinPresets = [
+        { id: 'realistic_character', label: 'Realistic Character' },
+        { id: 'portrait_hd', label: 'Portrait HD' },
+        { id: 'cinematic_full', label: 'Cinematic Full' },
+        { id: 'fast_preview', label: 'Fast Preview' },
+        { id: 'maximum_quality', label: 'Maximum Quality' }
+    ];
 
     async function handleSubmit() {
         if (activeTab === 'generate') {
@@ -108,11 +116,12 @@
             useTtDecoder,
             outputDir,
             prefix,
-            negativePrompt,
             steps: zimageSteps,
             guidanceScale,
             seed: zimageSeed,
             loraScale,
+            shift,
+            preset,
             second_pass_enabled: secondPassEnabled,
             second_pass_upscale: secondPassUpscale,
             second_pass_strength: secondPassStrength,
@@ -228,8 +237,8 @@
 
             updateResult(resultId, { status: 'PROCESSING', prompt: data.prompt });
 
-            if (data.model === 'z-image') {
-                await pollZimageTask(resultId, data.jobId, payload);
+            if (data.model === 'z-image' || data.model === 'flux-klein') {
+                await pollRunpodTask(resultId, data.jobId, payload);
             } else {
                 await pollTask(resultId, data.taskId, payload);
             }
@@ -310,15 +319,15 @@
         }
     }
 
-    async function pollZimageTask(resultId: string, jobId: string, payload: any) {
-        const { runpodKey: taskRunpodKey, outputDir: taskOutputDir, prefix: taskPrefix } = payload;
+    async function pollRunpodTask(resultId: string, jobId: string, payload: any) {
+        const { runpodKey: taskRunpodKey, outputDir: taskOutputDir, prefix: taskPrefix, model: taskModel } = payload;
 
         while (!isCancelled) {
             try {
                 const response = await fetch('/api/zimage-check', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ jobId, runpodKey: taskRunpodKey, outputDir: taskOutputDir, prefix: taskPrefix })
+                    body: JSON.stringify({ jobId, runpodKey: taskRunpodKey, outputDir: taskOutputDir, prefix: taskPrefix, model: taskModel })
                 });
                 const data = await response.json();
 
@@ -516,7 +525,9 @@
             {#if activeTab === 'generate'}
                 <div class="settings-header">
                     <h2>Generation Settings</h2>
-                    <span class="settings-badge">{model === 'z-image' ? 'Z-Image' : 'FLUX.1-dev'}</span>
+                    <span class="settings-badge">
+                        {#if model === 'flux-dev'}FLUX.1-dev{:else if model === 'flux-klein'}FLUX.2-klein{:else}Z-Image{/if}
+                    </span>
                 </div>
 
                 <!-- Model Selector -->
@@ -524,6 +535,7 @@
                     <label for="genModel">Generation Model</label>
                     <select id="genModel" bind:value={model}>
                         <option value="flux-dev">FLUX.1-dev — RunningHub</option>
+                        <option value="flux-klein">FLUX.2-klein — RunPod Serverless</option>
                         <option value="z-image">Z-Image — RunPod Serverless</option>
                     </select>
                 </div>
@@ -588,23 +600,35 @@
                     </div>
                 </div>
 
-                {#if model === 'z-image'}
-                    <div class="field">
-                        <label for="negativePrompt">Negative Prompt</label>
-                        <textarea id="negativePrompt" bind:value={negativePrompt} placeholder="What to avoid in the image..."></textarea>
-                    </div>
+                {#if model === 'z-image' || model === 'flux-klein'}
+                    {#if model === 'flux-klein'}
+                        <div class="field">
+                            <label for="kleinPreset">Quality Preset</label>
+                            <select id="kleinPreset" bind:value={preset}>
+                                {#each kleinPresets as kp}
+                                    <option value={kp.id}>{kp.label}</option>
+                                {/each}
+                            </select>
+                        </div>
+                    {/if}
                     <div class="grid">
                         <div class="field">
                             <label for="zimageSteps">Inference Steps</label>
                             <input type="number" id="zimageSteps" bind:value={zimageSteps} min="10" max="50" />
                         </div>
-                        <div class="field">
-                            <label for="guidanceScale">Guidance Scale</label>
-                            <input type="number" id="guidanceScale" bind:value={guidanceScale} min="1" max="10" step="0.1" />
-                        </div>
+                        {#if model === 'z-image'}
+                            <div class="field">
+                                <label for="guidanceScale">Guidance Scale</label>
+                                <input type="number" id="guidanceScale" bind:value={guidanceScale} min="1" max="10" step="0.1" />
+                            </div>
+                            <div class="field">
+                                <label for="shift">Scheduler Shift</label>
+                                <input type="number" id="shift" bind:value={shift} min="0.5" max="10" step="0.1" />
+                            </div>
+                        {/if}
                         <div class="field">
                             <label for="loraScale">LoRA Scale</label>
-                            <input type="number" id="loraScale" bind:value={loraScale} min="0" max="1" step="0.05" />
+                            <input type="number" id="loraScale" bind:value={loraScale} min="0" max="2" step="0.05" />
                         </div>
                         <div class="field">
                             <label for="zimageSeed">Seed (−1 = random)</label>
@@ -612,31 +636,33 @@
                         </div>
                     </div>
 
-                    <!-- Second Pass Options -->
-                    <div class="field toggle-field" style="margin-top: 12px;">
-                        <label for="secondPassEnabled" class="toggle-label">
-                            <span class="toggle-text">Enable High-Res Refinement</span>
-                            <input type="checkbox" id="secondPassEnabled" bind:checked={secondPassEnabled} class="toggle-checkbox" />
-                            <span class="toggle-slider-ui"></span>
-                        </label>
-                        <p class="toggle-description">Runs a second pass for extra detail and upscaling</p>
-                    </div>
-
-                    {#if secondPassEnabled}
-                        <div class="grid second-pass-params">
-                            <div class="field">
-                                <label for="secondPassUpscale">Upscale Factor</label>
-                                <input type="number" id="secondPassUpscale" bind:value={secondPassUpscale} min="1" max="4" step="0.1" />
-                            </div>
-                            <div class="field">
-                                <label for="secondPassStrength">Denoising Strength</label>
-                                <input type="number" id="secondPassStrength" bind:value={secondPassStrength} min="0.01" max="1" step="0.01" />
-                            </div>
-                            <div class="field">
-                                <label for="secondPassGuidanceScale">Pass 2 Guidance</label>
-                                <input type="number" id="secondPassGuidanceScale" bind:value={secondPassGuidanceScale} min="1" max="5" step="0.1" />
-                            </div>
+                    {#if model === 'z-image'}
+                        <!-- Second Pass Options -->
+                        <div class="field toggle-field" style="margin-top: 12px;">
+                            <label for="secondPassEnabled" class="toggle-label">
+                                <span class="toggle-text">Enable High-Res Refinement</span>
+                                <input type="checkbox" id="secondPassEnabled" bind:checked={secondPassEnabled} class="toggle-checkbox" />
+                                <span class="toggle-slider-ui"></span>
+                            </label>
+                            <p class="toggle-description">Runs a second pass for extra detail and upscaling</p>
                         </div>
+
+                        {#if secondPassEnabled}
+                            <div class="grid second-pass-params">
+                                <div class="field">
+                                    <label for="secondPassUpscale">Upscale Factor</label>
+                                    <input type="number" id="secondPassUpscale" bind:value={secondPassUpscale} min="1" max="4" step="0.1" />
+                                </div>
+                                <div class="field">
+                                    <label for="secondPassStrength">Denoising Strength</label>
+                                    <input type="number" id="secondPassStrength" bind:value={secondPassStrength} min="0.01" max="1" step="0.01" />
+                                </div>
+                                <div class="field">
+                                    <label for="secondPassGuidanceScale">Pass 2 Guidance</label>
+                                    <input type="number" id="secondPassGuidanceScale" bind:value={secondPassGuidanceScale} min="1" max="5" step="0.1" />
+                                </div>
+                            </div>
+                        {/if}
                     {/if}
                 {/if}
             {:else}
@@ -697,7 +723,7 @@
 
         <div class="actions">
             <button class="btn-primary main-action" onclick={handleSubmit}>
-                {activeTab === 'generate' ? (model === 'z-image' ? 'Add Z-Image to Queue' : 'Add Generation to Queue') : 'Add Upscale to Queue'}
+                {activeTab === 'generate' ? (model === 'flux-dev' ? 'Add Generation to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`) : 'Add Upscale to Queue'}
             </button>
             <div class="action-grid">
                 {#if loading}
@@ -726,7 +752,9 @@
                 {#each queue as task (task.id)}
                     <div class="queue-item">
                         <div class="queue-info">
-                            <span class="queue-tag">{task.type === 'upscale' ? 'UPSCALE' : task.model === 'z-image' ? `Z-IMG ${task.aspectRatio}` : task.aspectRatio}</span>
+                            <span class="queue-tag">
+                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else}{task.aspectRatio}{/if}
+                            </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'upscale'}
                                     {task.fileName}

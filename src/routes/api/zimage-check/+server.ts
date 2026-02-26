@@ -6,29 +6,37 @@ import path from 'path';
 
 const MOUNT_PATH = '/mount';
 const RUNPOD_ZIMAGE_ENDPOINT_DEFAULT = 'https://api.runpod.ai/v2/j7rrb3raom3lzh';
+const RUNPOD_FLUX_KLEIN_ENDPOINT_DEFAULT = 'https://api.runpod.ai/v2/639jlguymlblim';
 
 export const POST: RequestHandler = async ({ request }) => {
-    const { jobId, runpodKey: userRunpodKey, outputDir, prefix } = await request.json();
+    const { jobId, runpodKey: userRunpodKey, outputDir, prefix, model } = await request.json();
 
     const runpodKey = userRunpodKey || env.RUNPOD_API_KEY || '';
     if (!runpodKey) {
         return json({ status: 'FAILED', error: 'RunPod API Key is required' });
     }
 
-    const endpointUrl = env.RUNPOD_ZIMAGE_ENDPOINT || RUNPOD_ZIMAGE_ENDPOINT_DEFAULT;
+    let endpointUrl = '';
+    if (model === 'flux-klein') {
+        endpointUrl = env.RUNPOD_FLUX_KLEIN_ENDPOINT || RUNPOD_FLUX_KLEIN_ENDPOINT_DEFAULT;
+    } else {
+        endpointUrl = env.RUNPOD_ZIMAGE_ENDPOINT || RUNPOD_ZIMAGE_ENDPOINT_DEFAULT;
+    }
 
     try {
-        console.log(`[Z-Image] Checking job: ${jobId}`);
+        console.log(`[RunPod Check] Checking ${model || 'z-image'} job: ${jobId}`);
         const statusRes = await fetch(`${endpointUrl}/status/${jobId}`, {
             headers: { 'Authorization': `Bearer ${runpodKey}` }
         });
 
         const data = await statusRes.json();
-        console.log(`[Z-Image] Job ${jobId} status: ${data.status}`);
+        console.log(`[RunPod Check] Job ${jobId} status: ${data.status}`);
 
         if (data.status === 'COMPLETED') {
-            const imageUrl = data.output?.image_url;
-            if (!imageUrl) throw new Error('No image_url in RunPod response');
+            // flux-klein returns image_urls (array), z-image returns image_url (string)
+            const imageUrl = model === 'flux-klein' ? data.output?.image_urls?.[0] : data.output?.image_url;
+            
+            if (!imageUrl) throw new Error('No image URL in RunPod response');
 
             const fullOutputDir = path.join(MOUNT_PATH, outputDir);
             await fs.mkdir(fullOutputDir, { recursive: true });
@@ -38,9 +46,11 @@ export const POST: RequestHandler = async ({ request }) => {
             const arrayBuffer = await imageRes.arrayBuffer();
             const imageBuffer = Buffer.from(arrayBuffer);
 
-            const filename = await getNextFilename(fullOutputDir, prefix, 'jpg');
+            // flux-klein results are usually jpeg from S3
+            const ext = imageUrl.split('?')[0].split('.').pop()?.toLowerCase() || 'jpg';
+            const filename = await getNextFilename(fullOutputDir, prefix, ext);
             await fs.writeFile(path.join(fullOutputDir, filename), imageBuffer);
-            console.log(`[Z-Image] Saved: ${filename}`);
+            console.log(`[RunPod Check] Saved: ${filename}`);
 
             return json({ status: 'SUCCESS', filename });
 
@@ -54,7 +64,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
-        console.error(`[Z-Image] Error checking job ${jobId}:`, err);
+        console.error(`[RunPod Check] Error checking job ${jobId}:`, err);
         return json({ status: 'FAILED', error: message });
     }
 };
