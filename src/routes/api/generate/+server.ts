@@ -38,8 +38,10 @@ export const POST: RequestHandler = async ({ request }) => {
         klein_enable_2nd_pass = false,
         klein_second_pass_strength = 0.35,
         klein_second_pass_steps = 20,
+        klein_second_pass_guidance_scale = 1.0,
         klein_enable_upscale = false,
         klein_upscale_factor = 2.0,
+        klein_upscale_blend = 0.25,
     } = await request.json();
 
     // Resolve keys: user input overrides env vars
@@ -379,10 +381,12 @@ RULES:
                             enable_2nd_pass: true,
                             second_pass_strength: klein_second_pass_strength,
                             second_pass_steps: klein_second_pass_steps,
+                            second_pass_guidance_scale: klein_second_pass_guidance_scale,
                         } : {}),
                         ...(klein_enable_upscale ? {
                             enable_upscale: true,
                             upscale_factor: klein_upscale_factor,
+                            upscale_blend: klein_upscale_blend,
                         } : {}),
                     }
                 })

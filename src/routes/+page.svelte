@@ -39,8 +39,10 @@
     let kleinEnable2ndPass = $state(false);
     let kleinSecondPassStrength = $state(0.35);
     let kleinSecondPassSteps = $state(20);
+    let kleinSecondPassGuidanceScale = $state(1.0);
     let kleinEnableUpscale = $state(false);
     let kleinUpscaleFactor = $state(2.0);
+    let kleinUpscaleBlend = $state(0.25);
 
     // Load persisted settings
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
@@ -139,8 +141,10 @@
             klein_enable_2nd_pass: kleinEnable2ndPass,
             klein_second_pass_strength: kleinSecondPassStrength,
             klein_second_pass_steps: kleinSecondPassSteps,
+            klein_second_pass_guidance_scale: kleinSecondPassGuidanceScale,
             klein_enable_upscale: kleinEnableUpscale,
             klein_upscale_factor: kleinUpscaleFactor,
+            klein_upscale_blend: kleinUpscaleBlend,
             createdAt: new Date().toISOString()
         };
 
@@ -672,6 +676,10 @@
                                     <label for="kleinSecondPassSteps">Refinement Steps</label>
                                     <input type="number" id="kleinSecondPassSteps" bind:value={kleinSecondPassSteps} min="5" max="50" />
                                 </div>
+                                <div class="field">
+                                    <label for="kleinSecondPassGuidanceScale">Refinement Guidance</label>
+                                    <input type="number" id="kleinSecondPassGuidanceScale" bind:value={kleinSecondPassGuidanceScale} min="1" max="5" step="0.1" />
+                                </div>
                             </div>
                         {/if}
 
@@ -690,6 +698,10 @@
                                 <div class="field">
                                     <label for="kleinUpscaleFactor">Upscale Factor</label>
                                     <input type="number" id="kleinUpscaleFactor" bind:value={kleinUpscaleFactor} min="1.5" max="4" step="0.5" />
+                                </div>
+                                <div class="field">
+                                    <label for="kleinUpscaleBlend">Upscale Blend</label>
+                                    <input type="number" id="kleinUpscaleBlend" bind:value={kleinUpscaleBlend} min="0" max="1" step="0.05" />
                                 </div>
                             </div>
                         {/if}

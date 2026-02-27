@@ -158,8 +158,10 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | Enable Detail Refinement | off | Runs a second inference pass to sharpen fine details and textures |
 | ↳ Refinement Strength | `0.35` | Img2img denoising strength for the refinement pass |
 | ↳ Refinement Steps | `20` | Inference steps for the refinement pass |
+| ↳ Refinement Guidance | `1.0` | CFG scale for the refinement pass |
 | Enable Upscaling | off | Upscales the generated image server-side before delivery |
 | ↳ Upscale Factor | `2.0` | Scale multiplier (1.5–4×) |
+| ↳ Upscale Blend | `0.25` | Blending factor between original and upscaled features |
 
 ## API Reference
 
