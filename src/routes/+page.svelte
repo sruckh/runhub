@@ -44,6 +44,13 @@
     let kleinUpscaleFactor = $state(2.0);
     let kleinUpscaleBlend = $state(0.25);
 
+    // RunningHub ZImage Upscale + Face Detailer params
+    let rhubZimageStyle = $state('None');
+    let rhubZimagePresetId = $state('ig_portrait');
+    let rhubZimageOrientation = $state('portrait');
+    let rhubZimageWidth = $state(816);
+    let rhubZimageHeight = $state(1024);
+
     // Load persisted settings
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
     let useTtDecoder = $state(savedTtDecoder);
@@ -103,6 +110,58 @@
         { id: 'maximum_quality', label: 'Maximum Quality' }
     ];
 
+    const rhubZimageStyles = [
+        'None', 'Phone Photo', 'Casual Photo', 'Vintage Photo', 'Portra Film Photo',
+        '70s Memories Photo', 'Flash 90s Photo', 'Production Photo', 'Classic Film Photo',
+        'Noir Photo', '80s Dark Fantasy Photo', 'Lomography', 'Spotlight Stage Photo',
+        'Unconventional Viewpoint', 'Dramatic Viewpoint', 'Wide Angle / Peephole',
+        'Drone Photo', 'Minimalist Photo', 'High-Key Fashion Photo', 'Light and Airy Photo',
+        'Teal and Orange Photo', 'Orthochromatic Spirit Photo', 'Synthwave Photo',
+        'Quiet Luxury Photo', 'Dark-Side Photo', 'Dramatic Light & Shadow',
+        'Pastel Dream Aesthetic', 'Street Documentary Photo', 'Tilt Shift / Toy Photo',
+        'Pop Photo'
+    ];
+
+    const rhubZimageResPresets = [
+        // Social Media
+        { id: 'ig_square',   label: 'Instagram Square',         w: 1024, h: 1024, group: 'Social Media' },
+        { id: 'ig_portrait', label: 'Instagram Portrait',       w: 816,  h: 1024, group: 'Social Media' },
+        { id: 'ig_land',     label: 'Instagram Landscape',      w: 1024, h: 536,  group: 'Social Media' },
+        { id: 'stories',     label: 'Stories / Reels / TikTok', w: 576,  h: 1024, group: 'Social Media' },
+        { id: 'twitter',     label: 'Twitter/X Post',           w: 1024, h: 576,  group: 'Social Media' },
+        { id: 'pinterest',   label: 'Pinterest Pin',            w: 680,  h: 1024, group: 'Social Media' },
+        { id: 'youtube',     label: 'YouTube Thumbnail',        w: 1024, h: 576,  group: 'Social Media' },
+        { id: 'fb_cover',    label: 'Facebook Cover',           w: 1024, h: 392,  group: 'Social Media' },
+        { id: 'linkedin',    label: 'LinkedIn Post',            w: 1024, h: 536,  group: 'Social Media' },
+        { id: 'cinematic',   label: 'Widescreen / Cinematic',   w: 1024, h: 440,  group: 'Social Media' },
+        // Print
+        { id: 'photo_4x6',   label: '4×6 Photo',               w: 680,  h: 1024, group: 'Print' },
+        { id: 'photo_5x7',   label: '5×7 Photo',               w: 728,  h: 1024, group: 'Print' },
+        { id: 'photo_8x10',  label: '8×10 Photo',              w: 816,  h: 1024, group: 'Print' },
+        { id: 'us_letter',   label: 'US Letter (8.5×11)',       w: 792,  h: 1024, group: 'Print' },
+        { id: 'a4',          label: 'A4',                       w: 720,  h: 1024, group: 'Print' },
+        { id: 'sq_print',    label: 'Square (album / poster)',  w: 1024, h: 1024, group: 'Print' },
+        { id: 'panoramic',   label: 'Panoramic / Banner',       w: 1024, h: 512,  group: 'Print' },
+        { id: 'portrait_34', label: 'Portrait 3:4',             w: 768,  h: 1024, group: 'Print' },
+    ];
+
+    const rhubZimagePresetsSocial = rhubZimageResPresets.filter(p => p.group === 'Social Media');
+    const rhubZimagePresetsPrint  = rhubZimageResPresets.filter(p => p.group === 'Print');
+
+    $effect(() => {
+        const preset = rhubZimageResPresets.find(p => p.id === rhubZimagePresetId) ?? rhubZimageResPresets[0];
+        if (preset.w === preset.h) {
+            rhubZimageWidth  = preset.w;
+            rhubZimageHeight = preset.h;
+        } else if (rhubZimageOrientation === 'landscape') {
+            rhubZimageWidth  = Math.max(preset.w, preset.h);
+            rhubZimageHeight = Math.min(preset.w, preset.h);
+        } else {
+            rhubZimageWidth  = Math.min(preset.w, preset.h);
+            rhubZimageHeight = Math.max(preset.w, preset.h);
+        }
+    });
+
     async function handleSubmit() {
         if (activeTab === 'generate') {
             addToQueue();
@@ -145,6 +204,9 @@
             klein_enable_upscale: kleinEnableUpscale,
             klein_upscale_factor: kleinUpscaleFactor,
             klein_upscale_blend: kleinUpscaleBlend,
+            rhub_zimage_style: rhubZimageStyle,
+            rhub_zimage_width: rhubZimageWidth,
+            rhub_zimage_height: rhubZimageHeight,
             createdAt: new Date().toISOString()
         };
 
@@ -545,7 +607,7 @@
                 <div class="settings-header">
                     <h2>Generation Settings</h2>
                     <span class="settings-badge">
-                        {#if model === 'flux-dev'}FLUX.1-dev{:else if model === 'flux-klein'}FLUX.2-klein{:else}Z-Image{/if}
+                        {#if model === 'flux-dev'}FLUX.1-dev{:else if model === 'flux-klein'}FLUX.2-klein{:else if model === 'rhub-zimage'}ZImage Upscale{:else}Z-Image{/if}
                     </span>
                 </div>
 
@@ -556,6 +618,7 @@
                         <option value="flux-dev">FLUX.1-dev — RunningHub</option>
                         <option value="flux-klein">FLUX.2-klein — RunPod Serverless</option>
                         <option value="z-image">Z-Image — RunPod Serverless</option>
+                        <option value="rhub-zimage">ZImage Upscale — RunningHub</option>
                     </select>
                 </div>
 
@@ -609,6 +672,7 @@
                         <label for="numPrompts">Number of Prompts</label>
                         <input type="number" id="numPrompts" bind:value={numPrompts} min="1" max="50" />
                     </div>
+                    {#if model !== 'rhub-zimage'}
                     <div class="field">
                         <label for="aspectRatio">Aspect Ratio</label>
                         <select id="aspectRatio" bind:value={aspectRatio}>
@@ -617,7 +681,50 @@
                             {/each}
                         </select>
                     </div>
+                    {/if}
                 </div>
+
+                {#if model === 'rhub-zimage'}
+                    <div class="field">
+                        <label for="rhubZimageStyle">Image Style</label>
+                        <select id="rhubZimageStyle" bind:value={rhubZimageStyle}>
+                            {#each rhubZimageStyles as style}
+                                <option value={style}>{style}</option>
+                            {/each}
+                        </select>
+                    </div>
+                    <div class="grid">
+                        <div class="field">
+                            <label for="rhubZimagePreset">Resolution Preset</label>
+                            <select id="rhubZimagePreset" bind:value={rhubZimagePresetId}>
+                                <option disabled>── Social Media ──</option>
+                                {#each rhubZimagePresetsSocial as p}
+                                    <option value={p.id}>{p.label}</option>
+                                {/each}
+                                <option disabled>── Print ──</option>
+                                {#each rhubZimagePresetsPrint as p}
+                                    <option value={p.id}>{p.label}</option>
+                                {/each}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Orientation</label>
+                            <div class="orient-row">
+                                {#if rhubZimageWidth !== rhubZimageHeight}
+                                    <button type="button" class="orient-btn {rhubZimageOrientation === 'portrait' ? 'active' : ''}" onclick={() => rhubZimageOrientation = 'portrait'}>Portrait</button>
+                                    <button type="button" class="orient-btn {rhubZimageOrientation === 'landscape' ? 'active' : ''}" onclick={() => rhubZimageOrientation = 'landscape'}>Landscape</button>
+                                {:else}
+                                    <span class="orient-square">Square (1:1)</span>
+                                {/if}
+                                <span class="dim-preview">{rhubZimageWidth} × {rhubZimageHeight}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="zimageSeed">Seed (−1 = random)</label>
+                        <input type="number" id="zimageSeed" bind:value={zimageSeed} min="-1" />
+                    </div>
+                {/if}
 
                 {#if model === 'z-image' || model === 'flux-klein'}
                     {#if model === 'flux-klein'}
@@ -794,7 +901,7 @@
 
         <div class="actions">
             <button class="btn-primary main-action" onclick={handleSubmit}>
-                {activeTab === 'generate' ? (model === 'flux-dev' ? 'Add Generation to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`) : 'Add Upscale to Queue'}
+                {activeTab === 'generate' ? (model === 'flux-dev' ? 'Add Generation to Queue' : model === 'rhub-zimage' ? 'Add ZImage Upscale to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`) : 'Add Upscale to Queue'}
             </button>
             <div class="action-grid">
                 {#if loading}
@@ -824,7 +931,7 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else}{task.aspectRatio}{/if}
+                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else}{task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'upscale'}
@@ -1170,16 +1277,72 @@
     .toggle-checkbox:checked + .toggle-slider-ui::before { transform: translateX(20px); }
     .toggle-description { font-size: 0.75rem; color: #64748b; margin-top: -8px; margin-bottom: 12px; }
     
-    input, select, textarea { 
+    input, select, textarea {
         width: 100%;
-        padding: 12px; 
-        border: 1px solid #cbd5e1; 
-        border-radius: 8px; 
-        font-size: 1rem; 
+        padding: 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 1rem;
         appearance: none;
         background-color: white;
     }
-    
+
+    select {
+        background-color: #f8fafc;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 40px;
+        border-color: #94a3b8;
+        cursor: pointer;
+    }
+    select:focus { border-color: #2563eb; outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+    /* Orientation toggle */
+    .orient-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        min-height: 48px;
+    }
+    .orient-btn {
+        flex: 1;
+        min-height: 40px;
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        font-size: 0.875rem;
+        font-weight: 500;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.15s;
+        width: auto;
+        padding: 8px 12px;
+    }
+    .orient-btn.active {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
+    }
+    .orient-btn:hover:not(.active) { background: #e2e8f0; }
+    .orient-square {
+        font-size: 0.875rem;
+        color: #64748b;
+        font-style: italic;
+    }
+    .dim-preview {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #2563eb;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-family: 'Courier New', monospace;
+        white-space: nowrap;
+    }
+
     /* Better touch targets for mobile */
     input[type="number"], select {
         min-height: 48px;

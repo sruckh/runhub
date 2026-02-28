@@ -42,6 +42,10 @@ export const POST: RequestHandler = async ({ request }) => {
         klein_enable_upscale = false,
         klein_upscale_factor = 2.0,
         klein_upscale_blend = 0.25,
+        // RunningHub ZImage Upscale + Face Detailer params
+        rhub_zimage_style = 'None',
+        rhub_zimage_width = 896,
+        rhub_zimage_height = 1120,
     } = await request.json();
 
     // Resolve keys: user input overrides env vars
@@ -58,8 +62,8 @@ export const POST: RequestHandler = async ({ request }) => {
         }
     }
 
-    if (model === 'flux-dev' && !rhubKey) {
-        return json({ error: 'RunningHub API Key is required for FLUX.1-dev' }, { status: 400 });
+    if ((model === 'flux-dev' || model === 'rhub-zimage') && !rhubKey) {
+        return json({ error: 'RunningHub API Key is required' }, { status: 400 });
     }
     if ((model === 'z-image' || model === 'flux-klein') && !runpodKey) {
         return json({ error: `RunPod API Key is required for ${model}` }, { status: 400 });
@@ -131,7 +135,7 @@ Subject: ${loraKeyword ? `${loraKeyword} — ` : ''}${subject}`,
             );
 
             // STEP 3: Generate final prompt
-            console.log(`Step 3: Generating ${model === 'z-image' ? 'Z-Image' : model === 'flux-klein' ? 'FLUX-Klein' : 'FLUX'} Prompt...`);
+            console.log(`Step 3: Generating ${(model === 'z-image' || model === 'rhub-zimage') ? 'Z-Image' : model === 'flux-klein' ? 'FLUX-Klein' : 'FLUX'} Prompt...`);
             let finalSystemPrompt = '';
             let finalUserMessage = '';
 
@@ -264,7 +268,7 @@ Return **only** the following sections, nothing else:
 Do not include analysis, bullet explanations, or extra commentary.`;
 
                 finalUserMessage = `Subject: ${loraKeyword ? `${loraKeyword} — ` : ''}${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate the optimized FLUX.2 [klein] 9B prompt.`;
-            } else if (model === 'z-image') {
+            } else if (model === 'z-image' || model === 'rhub-zimage') {
                 finalSystemPrompt = `# Role
 You are the Z-Image Turbo Prompt Architect. Your goal is to transform simple user ideas into "Single-Stream DiT" optimized prompts for the Z-Image Turbo 6B model.
 
@@ -311,7 +315,7 @@ RULES:
 
             if (model === 'flux-klein') {
                 promptMatch = responseText.match(/OPTIMIZED PROMPT:\s*(.*)/is);
-            } else if (model === 'z-image') {
+            } else if (model === 'z-image' || model === 'rhub-zimage') {
                 promptMatch = responseText.match(/\*\*The Optimized Prompt\*\*:\s*(.*)/is);
             } else {
                 promptMatch = responseText.match(/PROMPT:\s*(.*)/is);
@@ -395,6 +399,39 @@ RULES:
             const kleinData = await kleinRes.json();
             if (!kleinData.id) throw new Error(`RunPod submission failed: ${JSON.stringify(kleinData)}`);
             return json({ jobId: kleinData.id, model: 'flux-klein', prompt: finalPrompt });
+        }
+
+        // ── ZImage Upscale + Face Detailer via RunningHub ─────────────────────
+        if (model === 'rhub-zimage') {
+            const effectiveSeed = seed === -1 ? Math.floor(Math.random() * 1000000000) : seed;
+
+            console.log(`[RHUB-ZImage] Submitting style="${rhub_zimage_style}" seed=${effectiveSeed} size=${rhub_zimage_width}x${rhub_zimage_height}`);
+            console.log(`[RHUB-ZImage] nodeId 98 fieldValue raw: ${JSON.stringify(`"${rhub_zimage_style}"`)}`);
+            console.log(`[RHUB-ZImage] Prompt (first 80): ${finalPrompt.substring(0, 80)}`);
+
+            const rhubZimagePayload = {
+                nodeInfoList: [
+                    { nodeId: "81", fieldName: "value", fieldValue: rhub_zimage_width.toString(), description: "Width before 2x Upscale" },
+                    { nodeId: "82", fieldName: "value", fieldValue: rhub_zimage_height.toString(), description: "Height before 2x Upscale" },
+                    { nodeId: "83", fieldName: "value", fieldValue: effectiveSeed.toString(), description: "Seed" },
+                    { nodeId: "89", fieldName: "value", fieldValue: loraUrl || '', description: "ZImage LoRA URL" },
+                    { nodeId: "99", fieldName: "value", fieldValue: finalPrompt, description: "Prompt" },
+                    { nodeId: "98", fieldName: "text", fieldValue: `"${rhub_zimage_style}"`, description: "Image Style" },
+                ],
+                instanceType: "default",
+                usePersonalQueue: "false"
+            };
+
+            const rhubZimageResponse = await fetch('https://www.runninghub.ai/openapi/v2/run/ai-app/2027454454034862082', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${rhubKey}` },
+                body: JSON.stringify(rhubZimagePayload)
+            });
+
+            const zimageSubmitData = await rhubZimageResponse.json();
+            if (!zimageSubmitData.taskId) throw new Error(`RunningHub ZImage submission failed: ${JSON.stringify(zimageSubmitData)}`);
+
+            return json({ taskId: zimageSubmitData.taskId, model: 'rhub-zimage', prompt: finalPrompt });
         }
 
         // ── FLUX.1-dev via RunningHub ──────────────────────────────────────────
