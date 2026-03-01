@@ -36,15 +36,12 @@ export const POST: RequestHandler = async ({ request }) => {
         second_pass_guidance_scale = 1.2,
         // FLUX.2-klein 2nd pass / upscale params
         klein_enable_2nd_pass = false,
-        klein_second_pass_strength = 0.35,
-        klein_second_pass_steps = 20,
+        klein_second_pass_strength = 0.2,
+        klein_second_pass_steps = 12,
         klein_second_pass_guidance_scale = 1.0,
         klein_enable_upscale = false,
         klein_upscale_factor = 2.0,
-        klein_upscale_blend = 0.25,
-        // FLUX.2-klein prompt weighting params
-        klein_prompt_2 = '',
-        klein_prompt_2_weight = 0.0,
+        klein_upscale_blend = 0.35,
         // RunningHub ZImage Upscale + Face Detailer params
         rhub_zimage_style = 'None',
         rhub_zimage_width = 896,
@@ -394,10 +391,6 @@ RULES:
                             enable_upscale: true,
                             upscale_factor: klein_upscale_factor,
                             upscale_blend: klein_upscale_blend,
-                        } : {}),
-                        ...(klein_prompt_2?.trim() ? {
-                            prompt_2: klein_prompt_2.trim(),
-                            prompt_2_weight: klein_prompt_2_weight,
                         } : {}),
                     }
                 })

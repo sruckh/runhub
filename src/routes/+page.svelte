@@ -37,16 +37,12 @@
 
     // FLUX.2-klein 2nd pass / upscale params
     let kleinEnable2ndPass = $state(false);
-    let kleinSecondPassStrength = $state(0.35);
-    let kleinSecondPassSteps = $state(20);
+    let kleinSecondPassStrength = $state(0.2);
+    let kleinSecondPassSteps = $state(12);
     let kleinSecondPassGuidanceScale = $state(1.0);
     let kleinEnableUpscale = $state(false);
     let kleinUpscaleFactor = $state(2.0);
-    let kleinUpscaleBlend = $state(0.25);
-
-    // FLUX.2-klein prompt weighting params
-    let kleinPrompt2 = $state('');
-    let kleinPrompt2Weight = $state(0.0);
+    let kleinUpscaleBlend = $state(0.35);
 
     // RunningHub ZImage Upscale + Face Detailer params
     let rhubZimageStyle = $state('None');
@@ -212,8 +208,6 @@
             klein_enable_upscale: kleinEnableUpscale,
             klein_upscale_factor: kleinUpscaleFactor,
             klein_upscale_blend: kleinUpscaleBlend,
-            klein_prompt_2: kleinPrompt2,
-            klein_prompt_2_weight: kleinPrompt2Weight,
             rhub_zimage_style: rhubZimageStyle,
             rhub_zimage_width: rhubZimageWidth,
             rhub_zimage_height: rhubZimageHeight,
@@ -746,20 +740,6 @@
                                 {/each}
                             </select>
                         </div>
-
-                        <!-- Prompt Weighting (Dual-Prompt Blending) -->
-                        <div class="field" style="grid-column: 1 / -1;">
-                            <label for="kleinPrompt2">Secondary Prompt (for blending)</label>
-                            <input type="text" id="kleinPrompt2" bind:value={kleinPrompt2} placeholder="e.g., dramatic cinematic lighting, deep shadows..." />
-                            <p class="toggle-description">Blend two prompts together for fine-grained style control</p>
-                        </div>
-                        {#if kleinPrompt2.trim()}
-                            <div class="field">
-                                <label for="kleinPrompt2Weight">Prompt 2 Weight</label>
-                                <input type="number" id="kleinPrompt2Weight" bind:value={kleinPrompt2Weight} min="0" max="1" step="0.05" />
-                                <p class="toggle-description">0.0 = 100% primary, 1.0 = 100% secondary</p>
-                            </div>
-                        {/if}
                     {/if}
                     <div class="grid">
                         <div class="field">
