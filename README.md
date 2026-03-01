@@ -151,17 +151,17 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| Quality Preset | `realistic_character` | Preset bundle: steps, guidance, shift, and resolution tuned for the use-case. Options: `realistic_character`, `portrait_hd`, `cinematic_full`, `fast_preview`, `maximum_quality` |
+| Quality Preset | `realistic_character` | Preset bundle: steps, guidance, shift, and resolution tuned for the use-case. Options: `realistic_character`, `portrait_hd`, `cinematic_full`, `fast_preview`, `maximum_quality`, `character_portrait_best`, `character_portrait_vertical`, `character_cinematic` |
 | Inference Steps | `35` | Number of diffusion steps — use 35–50 for the base (undistilled) model |
 | LoRA Scale | `0.85` | LoRA adapter strength (0.75–0.9 recommended) |
 | Seed | `-1` (random) | Fixed seed for reproducibility |
 | Enable Detail Refinement | off | Runs a second inference pass to sharpen fine details and textures |
-| ↳ Refinement Strength | `0.35` | Img2img denoising strength for the refinement pass |
-| ↳ Refinement Steps | `20` | Inference steps for the refinement pass |
+| ↳ Refinement Strength | `0.2` | Img2img denoising strength for the refinement pass |
+| ↳ Refinement Steps | `12` | Inference steps for the refinement pass |
 | ↳ Refinement Guidance | `1.0` | CFG scale for the refinement pass |
 | Enable Upscaling | off | Upscales the generated image server-side before delivery |
 | ↳ Upscale Factor | `2.0` | Scale multiplier (1.5–4×) |
-| ↳ Upscale Blend | `0.25` | Blending factor between original and upscaled features |
+| ↳ Upscale Blend | `0.35` | Blending factor between original and upscaled features |
 
 ## API Reference
 
