@@ -42,6 +42,9 @@ export const POST: RequestHandler = async ({ request }) => {
         klein_enable_upscale = false,
         klein_upscale_factor = 2.0,
         klein_upscale_blend = 0.25,
+        // FLUX.2-klein prompt weighting params
+        klein_prompt_2 = '',
+        klein_prompt_2_weight = 0.0,
         // RunningHub ZImage Upscale + Face Detailer params
         rhub_zimage_style = 'None',
         rhub_zimage_width = 896,
@@ -391,6 +394,10 @@ RULES:
                             enable_upscale: true,
                             upscale_factor: klein_upscale_factor,
                             upscale_blend: klein_upscale_blend,
+                        } : {}),
+                        ...(klein_prompt_2?.trim() ? {
+                            prompt_2: klein_prompt_2.trim(),
+                            prompt_2_weight: klein_prompt_2_weight,
                         } : {}),
                     }
                 })
