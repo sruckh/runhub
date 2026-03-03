@@ -89,7 +89,7 @@ export const POST: RequestHandler = async ({ request }) => {
       new Set(normalizedKleinLoras.map((l) => l.keyword).filter(Boolean)),
     );
     const effectiveLoraKeyword =
-      model === "flux-klein"
+      (model === "flux-klein" || model === "z-image")
         ? kleinTriggerWords.join(", ") ||
           (typeof loraKeyword === "string" ? loraKeyword.trim() : "")
         : typeof loraKeyword === "string"
@@ -368,19 +368,27 @@ RULES:
         `[Z-Image] Submitting: "${finalPrompt.substring(0, 80)}..." seed=${effectiveSeed}`,
       );
 
+      // Build multi-LoRA array if provided, else legacy
+      const activeLoras = normalizedKleinLoras.filter((l) => l.url?.trim());
+      const lorasPayload =
+        activeLoras.length > 0
+          ? { loras: activeLoras.map((l) => ({ url: l.url.trim(), scale: l.scale })) }
+          : loraUrl
+            ? { lora_url: loraUrl, lora_scale: loraScale }
+            : {};
+
       const zimageRes = await fetch(`${endpointUrl}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${runpodKey}` },
         body: JSON.stringify({
           input: {
             prompt: finalPrompt,
-            ...(loraUrl ? { lora_url: loraUrl } : {}),
             width,
             height,
             steps,
             guidance_scale: guidanceScale,
             seed: effectiveSeed,
-            lora_scale: loraScale,
+            ...lorasPayload,
             second_pass_enabled,
             second_pass_upscale,
             second_pass_strength,

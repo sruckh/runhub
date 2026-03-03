@@ -1,14 +1,15 @@
 # rhub — RunningHub Precision Control Center
 
-> **Advanced image generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation (FLUX.1-dev via RunningHub, Z-Image via RunPod Serverless, and FLUX.2-klein via RunPod Serverless), sequential batch queuing, image upscaling with LSB steganography support, and real-time polling.**
+> **Advanced image generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation (FLUX.1-dev via RunningHub, Z-Image via RunPod Serverless, and FLUX.2-klein via RunPod Serverless), multi-LoRA additive blending, sequential batch queuing, image upscaling with LSB steganography support, and real-time polling.**
 
 **rhub** is a specialized SvelteKit-based dashboard that transforms simple subject descriptions into high-quality, LoRA-consistent imagery. It solves the "repetition problem" in AI generation by bridging expert prompt engineering (Gemini/Qwen) with multiple synthesis pipelines.
 
 ## Key Features
 
 - **Multi-Model Generation** — Switch between **FLUX.1-dev** (RunningHub), **Z-Image** (RunPod Serverless), and **FLUX.2-klein** (RunPod Serverless) from the Generate tab. The same AI prompt engineering pipeline feeds all three models.
+- **Multi-LoRA Blending** — Both **Z-Image** and **FLUX.2-klein** support a dynamic LoRA Stack. Load multiple adapters in parallel with per-LoRA strength control and additive blending.
 - **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed prompts via a 2-step process: location selection + AI composition. Each model has a specialized Prompt Director tuned for its strengths.
-- **FLUX.2-klein Support** — 9B-parameter undistilled flow-match transformer by Black Forest Labs, with quality presets, LoRA hot-swap, optional detail refinement (2nd pass), and server-side upscaling.
+- **FLUX.2-klein Support** — 9B-parameter undistilled flow-match transformer by Black Forest Labs, with quality presets, multi-LoRA support, optional detail refinement (2nd pass), and server-side upscaling.
 - **Image Upscaling** — Batch upscale images to 2K resolution using specialized RunningHub workflows. Handles intermediary storage via S3 (e.g., Backblaze B2) with automatic presigned URL generation.
 - **LSB Steganography (TT-Decoder/Encoder)** — Built-in TypeScript support for both extracting hidden data from generated images and **embedding data into carrier images** for secure upscale processing.
 - **Persistent Sequential Queue** — Bypasses RunningHub's single-task limitation with a robust client-side queue. Captures full form state (LoRA, model, output dir, API keys) per task, survives page refreshes, and processes jobs one-by-one.
@@ -40,17 +41,17 @@ The application runs as a single SvelteKit container. API routes handle server-s
 
 ### Generation Flow — Z-Image (RunPod Serverless)
 
-1. User selects **Z-Image** model and optionally sets inference steps, guidance scale, scheduler shift, LoRA scale, and seed.
+1. User selects **Z-Image** model and configures subject characteristics and an optional **LoRA Stack**.
 2. Tasks are added to the **Persistent Queue** with the same AI prompt engineering pipeline.
 3. Background processor picks the next task:
-   - AI synthesizes the prompt (same Gemini/Qwen pipeline as FLUX.1-dev).
-4. Job is submitted to the RunPod Z-Image Serverless endpoint (`/run`).
+   - AI synthesizes the prompt (same Gemini/Qwen pipeline as FLUX.1-dev). Trigger words from all LoRAs in the stack are automatically aggregated.
+4. Job is submitted to the RunPod Z-Image Serverless endpoint (`/run`) using the new multi-LoRA `loras` array.
 5. The client polls `/api/zimage-check` until the job completes, then downloads the JPG from the S3 URL returned by RunPod.
 6. Optionally, a **High-Res Refinement** second pass is run server-side before delivery.
 
 ### Generation Flow — FLUX.2-klein (RunPod Serverless)
 
-1. User selects **FLUX.2-klein** model, chooses a quality preset, configures a multi-LoRA stack, and optionally sets seed, max sequence length, detail refinement, and upscaling options.
+1. User selects **FLUX.2-klein** model, chooses a quality preset, configures a multi-LoRA stack, and optionally sets seed, prompt length limit, detail refinement, and upscaling options.
 2. Tasks are added to the **Persistent Queue** with the same AI prompt engineering pipeline.
 3. Background processor picks the next task:
    - AI synthesizes the prompt using the **FLUX Prompt Director** — a specialized system prompt tuned for FLUX.2 [klein] 9B (camera/film language, avoids SDXL boilerplate).
@@ -131,43 +132,41 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 | Parameter            | Default       | Description                                                                                                    |
 | -------------------- | ------------- | -------------------------------------------------------------------------------------------------------------- |
-| LoRA URL             | _(empty)_     | URL to a `.safetensors` LoRA file                                                                              |
-| LoRA Trigger Word    | _(empty)_     | Trigger word the LoRA was trained on (e.g. `TOK`). Injected as a hard rule into both prompt engineering steps. |
 | Aspect Ratio         | `1:1`         | 9 presets — dimensions are auto-calculated at 16px alignment (FLUX.1-dev and Z-Image)                          |
 | Output Sub-directory | `generations` | Sub-folder inside `/mount` where results are saved                                                             |
 | Filename Prefix      | `image`       | Prefix applied to all saved filenames                                                                          |
 
 #### Z-Image (RunPod Serverless)
 
-| Parameter                  | Default       | Description                                       |
-| -------------------------- | ------------- | ------------------------------------------------- |
-| Inference Steps            | `35`          | Number of diffusion steps (10–50)                 |
-| Guidance Scale             | `2.5`         | CFG scale                                         |
-| Scheduler Shift            | `1.5`         | FlowMatch scheduler shift                         |
-| LoRA Scale                 | `0.85`        | LoRA adapter strength                             |
-| Seed                       | `-1` (random) | Fixed seed for reproducibility                    |
-| Enable High-Res Refinement | off           | Runs a second pass for extra detail and upscaling |
-| ↳ Upscale Factor           | `1.5`         | Scale multiplier for the refinement pass          |
-| ↳ Denoising Strength       | `0.18`        | Img2img denoising strength for refinement         |
-| ↳ Pass 2 Guidance          | `1.2`         | CFG scale for the refinement pass                 |
+| Parameter                  | Default       | Description                                                                       |
+| -------------------------- | ------------- | --------------------------------------------------------------------------------- |
+| Inference Steps            | `50`          | Number of diffusion steps (10–50). 50 recommended for high realism.               |
+| Guidance Scale             | `3.5`         | CFG scale. 3.5-4.5 recommended for realism.                                       |
+| Scheduler Shift            | `1.5`         | FlowMatch scheduler shift.                                                        |
+| LoRA Stack                 | 1 empty row   | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale. |
+| Seed                       | `-1` (random) | Fixed seed for reproducibility.                                                   |
+| Enable High-Res Refinement | off           | Runs a second pass for extra detail and upscaling.                                |
+| ↳ Upscale Factor           | `1.5`         | Scale multiplier for the refinement pass.                                         |
+| ↳ Denoising Strength       | `0.18`        | Img2img denoising strength for refinement.                                        |
+| ↳ Pass 2 Guidance          | `1.2`         | CFG scale for the refinement pass.                                                |
 
 #### FLUX.2-klein (RunPod Serverless)
 
 | Parameter                  | Default               | Description                                                                                                                                                                                                                                                       |
 | -------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Quality Preset             | `realistic_character` | Preset bundle: steps, guidance, shift, and resolution tuned for the use-case. Options: `realistic_character`, `portrait_hd`, `cinematic_full`, `fast_preview`, `maximum_quality`, `character_portrait_best`, `character_portrait_vertical`, `character_cinematic` |
-| LoRA Stack                 | 1 empty row           | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale                                                                                                                                                                                  |
-| Seed                       | `-1` (random)         | Fixed seed for reproducibility                                                                                                                                                                                                                                    |
-| Max Sequence Length        | `512`                 | Text encoder token cap (`max_sequence_length`)                                                                                                                                                                                                                    |
-| LoRA Scale Mode            | `absolute`            | Multi-LoRA scale interpretation: `absolute` or `normalized`                                                                                                                                                                                                       |
-| Enable Detail Refinement   | off                   | Runs a second inference pass to sharpen fine details and textures                                                                                                                                                                                                 |
-| ↳ Refinement Strength      | `0.2`                 | Img2img denoising strength for the refinement pass                                                                                                                                                                                                                |
-| ↳ Refinement Steps         | `12`                  | Inference steps for the refinement pass                                                                                                                                                                                                                           |
-| ↳ Refinement Guidance      | `1.0`                 | CFG scale for the refinement pass                                                                                                                                                                                                                                 |
-| ↳ 2nd Pass LoRA Multiplier | `1.0`                 | Scales LoRA influence during pass 2 (`second_pass_lora_scale_multiplier`)                                                                                                                                                                                         |
-| Enable Upscaling           | off                   | Upscales the generated image server-side before delivery                                                                                                                                                                                                          |
-| ↳ Upscale Factor           | `2.0`                 | Scale multiplier (0.25–4×)                                                                                                                                                                                                                                        |
-| ↳ Upscale Blend            | `0.35`                | Blending factor between original and upscaled features                                                                                                                                                                                                            |
+| LoRA Stack                 | 1 empty row           | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale.                                                                                                                                                                                 |
+| Seed                       | `-1` (random)         | Fixed seed for reproducibility.                                                                                                                                                                                                                                   |
+| Prompt Length Limit        | `512`                 | Text encoder token cap (`max_sequence_length`).                                                                                                                                                                                                                   |
+| LoRA Mix Method            | `absolute`            | Multi-LoRA scale interpretation: `absolute` (exact strengths) or `normalized` (auto-balance).                                                                                                                                                                     |
+| Enable Detail Refinement   | off                   | Runs a second inference pass to sharpen fine details and textures.                                                                                                                                                                                                |
+| ↳ Refinement Strength      | `0.2`                 | Img2img denoising strength for the refinement pass.                                                                                                                                                                                                               |
+| ↳ Refinement Steps         | `12`                  | Inference steps for the refinement pass.                                                                                                                                                                                                                          |
+| ↳ Refinement Guidance      | `1.0`                 | CFG scale for the refinement pass.                                                                                                                                                                                                                                |
+| ↳ Refinement LoRA Strength | `1.0`                 | Scales LoRA influence during pass 2 (`second_pass_lora_scale_multiplier`).                                                                                                                                                                                        |
+| Enable Upscaling           | off                   | Upscales the generated image server-side before delivery.                                                                                                                                                                                                         |
+| ↳ Upscale Factor           | `2.0`                 | Scale multiplier (0.25–4×).                                                                                                                                                                                                                                       |
+| ↳ Upscale Blend            | `0.35`                | Blending factor between original and upscaled features.                                                                                                                                                                                                           |
 
 ## API Reference
 
@@ -176,7 +175,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 Submits an image generation job. Handles AI prompt engineering via Gemini or RunPod Qwen, then routes to the selected model backend.
 
 - **FLUX.1-dev**: Submits to RunningHub workflow. Returns `{ taskId, model: 'flux-dev', prompt }`.
-- **Z-Image**: Submits to RunPod Z-Image Serverless endpoint. Returns `{ jobId, model: 'z-image', prompt }`.
+- **Z-Image**: Submits to RunPod Z-Image Serverless endpoint with multi-LoRA `loras` array. Returns `{ jobId, model: 'z-image', prompt }`.
 - **FLUX.2-klein**: Submits to RunPod FLUX.2-klein Serverless endpoint with preset, multi-LoRA `loras`, `lora_scale_mode`, `max_sequence_length`, optional 2nd pass options, and optional upscale options. Returns `{ jobId, model: 'flux-klein', prompt }`.
 
 ### `POST /api/zimage-check`

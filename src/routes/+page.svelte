@@ -22,8 +22,8 @@
     let model = $state('flux-dev'); // 'flux-dev' | 'flux-klein' | 'z-image'
 
     // Z-Image / FLUX.2-klein extra params
-    let zimageSteps = $state(35);
-    let guidanceScale = $state(2.5);
+    let zimageSteps = $state(50);
+    let guidanceScale = $state(3.5);
     let zimageSeed = $state(-1);
     let loraScale = $state(0.85);
     let shift = $state(1.5);
@@ -206,10 +206,10 @@
             type: 'generate',
             model,
             loraUrl,
-            loraKeyword: model === 'flux-klein'
+            loraKeyword: (model === 'flux-klein' || model === 'z-image')
                 ? kleinLoras.map(l => l.keyword).map(k => k.trim()).filter(Boolean).join(', ')
                 : loraKeyword,
-            kleinLoras: model === 'flux-klein' ? kleinLoras : undefined,
+            kleinLoras: (model === 'flux-klein' || model === 'z-image') ? kleinLoras : undefined,
             subject,
             customPrompt,
             useCustomPrompt,
@@ -671,7 +671,7 @@
                 </div>
                 {/if}
 
-                {#if model === 'flux-klein'}
+                {#if model === 'flux-klein' || model === 'z-image'}
                     <div class="multi-lora-section">
                         <div class="multi-lora-header">
                             <span class="multi-lora-label">LoRA Stack</span>
@@ -708,6 +708,10 @@
                         <div class="field">
                             <label for="loraKeyword">LoRA Trigger Word</label>
                             <input type="text" id="loraKeyword" bind:value={loraKeyword} placeholder="e.g. K1mScum" />
+                        </div>
+                        <div class="field">
+                            <label for="loraScaleLegacy">LoRA Scale</label>
+                            <input type="number" id="loraScaleLegacy" bind:value={loraScale} min="0" max="2" step="0.05" />
                         </div>
                     </div>
                 {/if}
@@ -821,12 +825,6 @@
                                 <label for="shift">Scheduler Shift</label>
                                 <input type="number" id="shift" bind:value={shift} min="0.5" max="10" step="0.1" />
                             </div>
-                        {/if}
-                        {#if model === 'z-image'}
-                        <div class="field">
-                            <label for="loraScale">LoRA Scale</label>
-                            <input type="number" id="loraScale" bind:value={loraScale} min="0" max="2" step="0.05" />
-                        </div>
                         {/if}
                         <div class="field">
                             <label for="zimageSeed">Seed (−1 = random)</label>

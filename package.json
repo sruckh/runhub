@@ -15,8 +15,6 @@
     "@aws-sdk/client-s3": "^3.0.0",
     "@aws-sdk/s3-request-presigner": "^3.0.0",
     "@google/genai": "^1.0.0",
-    "oxc-parser": "^0.116.0",
-    "oxc-transform": "^0.116.0",
     "pngjs": "^7.0.0"
   },
   "devDependencies": {
