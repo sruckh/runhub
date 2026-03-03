@@ -834,15 +834,17 @@
                         </div>
                         {#if model === 'flux-klein'}
                             <div class="field">
-                                <label for="kleinMaxSequenceLength">Max Sequence Length</label>
+                                <label for="kleinMaxSequenceLength">Prompt Length Limit (tokens)</label>
                                 <input type="number" id="kleinMaxSequenceLength" bind:value={kleinMaxSequenceLength} min="1" max="512" step="1" />
+                                <p class="field-hint">Maximum prompt tokens read by the model. Extra tokens are truncated.</p>
                             </div>
                             <div class="field">
-                                <label for="kleinLoraScaleMode">LoRA Scale Mode</label>
+                                <label for="kleinLoraScaleMode">LoRA Mix Method</label>
                                 <select id="kleinLoraScaleMode" bind:value={kleinLoraScaleMode}>
-                                    <option value="absolute">absolute</option>
-                                    <option value="normalized">normalized</option>
+                                    <option value="absolute">Use Exact Strengths</option>
+                                    <option value="normalized">Auto-Balance by Ratio</option>
                                 </select>
+                                <p class="field-hint">Exact uses your raw values; Auto-Balance keeps the same ratio but normalizes total strength.</p>
                             </div>
                         {/if}
                     </div>
@@ -873,8 +875,9 @@
                                     <input type="number" id="kleinSecondPassGuidanceScale" bind:value={kleinSecondPassGuidanceScale} min="0.1" max="5" step="0.1" />
                                 </div>
                                 <div class="field">
-                                    <label for="kleinSecondPassLoraScaleMultiplier">2nd Pass LoRA Multiplier</label>
+                                    <label for="kleinSecondPassLoraScaleMultiplier">Refinement LoRA Strength</label>
                                     <input type="number" id="kleinSecondPassLoraScaleMultiplier" bind:value={kleinSecondPassLoraScaleMultiplier} min="0" max="2" step="0.05" />
+                                    <p class="field-hint">Scales LoRA effect only during the detail refinement pass.</p>
                                 </div>
                             </div>
                         {/if}
@@ -1680,6 +1683,12 @@
         margin-bottom: 4px;
         font-size: 0.85rem;
         color: #64748b;
+    }
+    .field-hint {
+        margin-top: 6px;
+        font-size: 0.78rem;
+        color: #64748b;
+        line-height: 1.35;
     }
 
     @media (max-width: 600px) {
