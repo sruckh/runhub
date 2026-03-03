@@ -29,37 +29,41 @@ The application runs as a single SvelteKit container. API routes handle server-s
 ![Data Flow Diagram](./docs/diagrams/data-flow.svg)
 
 ### Generation Flow — FLUX.1-dev (RunningHub)
+
 1. User selects **FLUX.1-dev** model, provides subject characteristics, LoRA URL, and API keys.
 2. Tasks are added to the **Persistent Queue**.
 3. Background processor picks the next task:
-    - AI selects a location and generates a vivid composition.
-    - AI synthesizes the final detailed FLUX.1-dev prompt.
+   - AI selects a location and generates a vivid composition.
+   - AI synthesizes the final detailed FLUX.1-dev prompt.
 4. Dimensions are calculated and the task is submitted to RunningHub.
 5. The client polls `/api/check` for status, downloads the result, and optionally decodes hidden data.
 
 ### Generation Flow — Z-Image (RunPod Serverless)
+
 1. User selects **Z-Image** model and optionally sets inference steps, guidance scale, scheduler shift, LoRA scale, and seed.
 2. Tasks are added to the **Persistent Queue** with the same AI prompt engineering pipeline.
 3. Background processor picks the next task:
-    - AI synthesizes the prompt (same Gemini/Qwen pipeline as FLUX.1-dev).
+   - AI synthesizes the prompt (same Gemini/Qwen pipeline as FLUX.1-dev).
 4. Job is submitted to the RunPod Z-Image Serverless endpoint (`/run`).
 5. The client polls `/api/zimage-check` until the job completes, then downloads the JPG from the S3 URL returned by RunPod.
 6. Optionally, a **High-Res Refinement** second pass is run server-side before delivery.
 
 ### Generation Flow — FLUX.2-klein (RunPod Serverless)
+
 1. User selects **FLUX.2-klein** model, chooses a quality preset, configures a multi-LoRA stack, and optionally sets seed, max sequence length, detail refinement, and upscaling options.
 2. Tasks are added to the **Persistent Queue** with the same AI prompt engineering pipeline.
 3. Background processor picks the next task:
-    - AI synthesizes the prompt using the **FLUX Prompt Director** — a specialized system prompt tuned for FLUX.2 [klein] 9B (camera/film language, avoids SDXL boilerplate).
+   - AI synthesizes the prompt using the **FLUX Prompt Director** — a specialized system prompt tuned for FLUX.2 [klein] 9B (camera/film language, avoids SDXL boilerplate).
 4. Job is submitted to the RunPod FLUX.2-klein Serverless endpoint (`/run`).
 5. The client polls `/api/zimage-check` until the job completes, then downloads the JPEG from the S3 presigned URL returned by RunPod.
 
 ### Upscale Flow
+
 1. User uploads images via the **Upscale** tab.
 2. Background processor picks the next upscale task:
-    - If **TT-Decoder** toggle is ON: The image is encoded into a new carrier PNG using **TT-Encoder**.
-    - The image (original or encoded) is uploaded to S3 storage.
-    - A temporary presigned URL is generated and sent to the RunningHub 2K Upscale workflow.
+   - If **TT-Decoder** toggle is ON: The image is encoded into a new carrier PNG using **TT-Encoder**.
+   - The image (original or encoded) is uploaded to S3 storage.
+   - A temporary presigned URL is generated and sent to the RunningHub 2K Upscale workflow.
 3. The client polls status and downloads the upscaled result.
 
 ## Quick Start
@@ -96,78 +100,79 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 ### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `RUNNINGHUB_API_KEY` | For FLUX.1-dev & Upscaling | RunningHub API key |
-| `GEMINI_API_KEY` | For Gemini prompt provider | Google Gemini API key |
-| `RUNPOD_API_KEY` | For Z-Image, FLUX.2-klein & Qwen provider | RunPod API key |
-| `RUNPOD_ZIMAGE_ENDPOINT` | For Z-Image | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`) |
-| `RUNPOD_FLUX_KLEIN_ENDPOINT` | For FLUX.2-klein | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`) |
-| `S3_ENDPOINT` | For Upscaling | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
-| `S3_BUCKET` | For Upscaling | Name of the bucket for intermediary image storage |
-| `S3_ACCESS_KEY_ID` | For Upscaling | S3 access key ID |
-| `S3_SECRET_ACCESS_KEY` | For Upscaling | S3 secret access key |
-| `S3_REGION` | For Upscaling | S3 region (default: `us-east-1`) |
-| `BODY_SIZE_LIMIT` | Always | Maximum upload size in bytes (e.g., `52428800` for 50MB) |
+| Variable                     | Required                                  | Description                                                         |
+| ---------------------------- | ----------------------------------------- | ------------------------------------------------------------------- |
+| `RUNNINGHUB_API_KEY`         | For FLUX.1-dev & Upscaling                | RunningHub API key                                                  |
+| `GEMINI_API_KEY`             | For Gemini prompt provider                | Google Gemini API key                                               |
+| `RUNPOD_API_KEY`             | For Z-Image, FLUX.2-klein & Qwen provider | RunPod API key                                                      |
+| `RUNPOD_ZIMAGE_ENDPOINT`     | For Z-Image                               | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
+| `RUNPOD_FLUX_KLEIN_ENDPOINT` | For FLUX.2-klein                          | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
+| `S3_ENDPOINT`                | For Upscaling                             | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
+| `S3_BUCKET`                  | For Upscaling                             | Name of the bucket for intermediary image storage                   |
+| `S3_ACCESS_KEY_ID`           | For Upscaling                             | S3 access key ID                                                    |
+| `S3_SECRET_ACCESS_KEY`       | For Upscaling                             | S3 secret access key                                                |
+| `S3_REGION`                  | For Upscaling                             | S3 region (default: `us-east-1`)                                    |
+| `BODY_SIZE_LIMIT`            | Always                                    | Maximum upload size in bytes (e.g., `52428800` for 50MB)            |
 
 ### Web UI Settings
 
-| Setting | Description |
-|---------|-------------|
-| **Generation Model** | Choose **FLUX.1-dev** (RunningHub), **Z-Image** (RunPod Serverless), or **FLUX.2-klein** (RunPod Serverless) |
-| **AI Prompt Provider** | Choose between Google Gemini or RunPod (Qwen 30B) for prompt engineering |
-| **RunningHub API Key** | Overrides `RUNNINGHUB_API_KEY` env var for this session |
-| **Gemini API Key** | Overrides `GEMINI_API_KEY` env var for this session |
-| **RunPod API Key** | Overrides `RUNPOD_API_KEY` env var for this session |
-| **Enable TT-Decoder** | Toggle LSB steganography decoding/encoding (FLUX.1-dev only, persisted in localStorage) |
+| Setting                | Description                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Generation Model**   | Choose **FLUX.1-dev** (RunningHub), **Z-Image** (RunPod Serverless), or **FLUX.2-klein** (RunPod Serverless) |
+| **AI Prompt Provider** | Choose between Google Gemini or RunPod (Qwen 30B) for prompt engineering                                     |
+| **RunningHub API Key** | Overrides `RUNNINGHUB_API_KEY` env var for this session                                                      |
+| **Gemini API Key**     | Overrides `GEMINI_API_KEY` env var for this session                                                          |
+| **RunPod API Key**     | Overrides `RUNPOD_API_KEY` env var for this session                                                          |
+| **Enable TT-Decoder**  | Toggle LSB steganography decoding/encoding (FLUX.1-dev only, persisted in localStorage)                      |
 
 ### Generation Parameters
 
 #### Shared (all models)
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| LoRA URL | *(empty)* | URL to a `.safetensors` LoRA file |
-| LoRA Trigger Word | *(empty)* | Trigger word the LoRA was trained on (e.g. `TOK`). Injected as a hard rule into both prompt engineering steps. |
-| Aspect Ratio | `1:1` | 9 presets — dimensions are auto-calculated at 16px alignment (FLUX.1-dev and Z-Image) |
-| Output Sub-directory | `generations` | Sub-folder inside `/mount` where results are saved |
-| Filename Prefix | `image` | Prefix applied to all saved filenames |
+| Parameter            | Default       | Description                                                                                                    |
+| -------------------- | ------------- | -------------------------------------------------------------------------------------------------------------- |
+| LoRA URL             | _(empty)_     | URL to a `.safetensors` LoRA file                                                                              |
+| LoRA Trigger Word    | _(empty)_     | Trigger word the LoRA was trained on (e.g. `TOK`). Injected as a hard rule into both prompt engineering steps. |
+| Aspect Ratio         | `1:1`         | 9 presets — dimensions are auto-calculated at 16px alignment (FLUX.1-dev and Z-Image)                          |
+| Output Sub-directory | `generations` | Sub-folder inside `/mount` where results are saved                                                             |
+| Filename Prefix      | `image`       | Prefix applied to all saved filenames                                                                          |
 
 #### Z-Image (RunPod Serverless)
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Inference Steps | `35` | Number of diffusion steps (10–50) |
-| Guidance Scale | `2.5` | CFG scale |
-| Scheduler Shift | `1.5` | FlowMatch scheduler shift |
-| LoRA Scale | `0.85` | LoRA adapter strength |
-| Seed | `-1` (random) | Fixed seed for reproducibility |
-| Enable High-Res Refinement | off | Runs a second pass for extra detail and upscaling |
-| ↳ Upscale Factor | `1.5` | Scale multiplier for the refinement pass |
-| ↳ Denoising Strength | `0.18` | Img2img denoising strength for refinement |
-| ↳ Pass 2 Guidance | `1.2` | CFG scale for the refinement pass |
+| Parameter                  | Default       | Description                                       |
+| -------------------------- | ------------- | ------------------------------------------------- |
+| Inference Steps            | `35`          | Number of diffusion steps (10–50)                 |
+| Guidance Scale             | `2.5`         | CFG scale                                         |
+| Scheduler Shift            | `1.5`         | FlowMatch scheduler shift                         |
+| LoRA Scale                 | `0.85`        | LoRA adapter strength                             |
+| Seed                       | `-1` (random) | Fixed seed for reproducibility                    |
+| Enable High-Res Refinement | off           | Runs a second pass for extra detail and upscaling |
+| ↳ Upscale Factor           | `1.5`         | Scale multiplier for the refinement pass          |
+| ↳ Denoising Strength       | `0.18`        | Img2img denoising strength for refinement         |
+| ↳ Pass 2 Guidance          | `1.2`         | CFG scale for the refinement pass                 |
 
 #### FLUX.2-klein (RunPod Serverless)
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Quality Preset | `realistic_character` | Preset bundle: steps, guidance, shift, and resolution tuned for the use-case. Options: `realistic_character`, `portrait_hd`, `cinematic_full`, `fast_preview`, `maximum_quality`, `character_portrait_best`, `character_portrait_vertical`, `character_cinematic` |
-| LoRA Stack | 1 empty row | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale |
-| Seed | `-1` (random) | Fixed seed for reproducibility |
-| Max Sequence Length | `512` | Text encoder token cap (`max_sequence_length`) |
-| LoRA Scale Mode | `absolute` | Multi-LoRA scale interpretation: `absolute` or `normalized` |
-| Enable Detail Refinement | off | Runs a second inference pass to sharpen fine details and textures |
-| ↳ Refinement Strength | `0.2` | Img2img denoising strength for the refinement pass |
-| ↳ Refinement Steps | `12` | Inference steps for the refinement pass |
-| ↳ Refinement Guidance | `1.0` | CFG scale for the refinement pass |
-| ↳ 2nd Pass LoRA Multiplier | `1.0` | Scales LoRA influence during pass 2 (`second_pass_lora_scale_multiplier`) |
-| Enable Upscaling | off | Upscales the generated image server-side before delivery |
-| ↳ Upscale Factor | `2.0` | Scale multiplier (0.25–4×) |
-| ↳ Upscale Blend | `0.35` | Blending factor between original and upscaled features |
+| Parameter                  | Default               | Description                                                                                                                                                                                                                                                       |
+| -------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Quality Preset             | `realistic_character` | Preset bundle: steps, guidance, shift, and resolution tuned for the use-case. Options: `realistic_character`, `portrait_hd`, `cinematic_full`, `fast_preview`, `maximum_quality`, `character_portrait_best`, `character_portrait_vertical`, `character_cinematic` |
+| LoRA Stack                 | 1 empty row           | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale                                                                                                                                                                                  |
+| Seed                       | `-1` (random)         | Fixed seed for reproducibility                                                                                                                                                                                                                                    |
+| Max Sequence Length        | `512`                 | Text encoder token cap (`max_sequence_length`)                                                                                                                                                                                                                    |
+| LoRA Scale Mode            | `absolute`            | Multi-LoRA scale interpretation: `absolute` or `normalized`                                                                                                                                                                                                       |
+| Enable Detail Refinement   | off                   | Runs a second inference pass to sharpen fine details and textures                                                                                                                                                                                                 |
+| ↳ Refinement Strength      | `0.2`                 | Img2img denoising strength for the refinement pass                                                                                                                                                                                                                |
+| ↳ Refinement Steps         | `12`                  | Inference steps for the refinement pass                                                                                                                                                                                                                           |
+| ↳ Refinement Guidance      | `1.0`                 | CFG scale for the refinement pass                                                                                                                                                                                                                                 |
+| ↳ 2nd Pass LoRA Multiplier | `1.0`                 | Scales LoRA influence during pass 2 (`second_pass_lora_scale_multiplier`)                                                                                                                                                                                         |
+| Enable Upscaling           | off                   | Upscales the generated image server-side before delivery                                                                                                                                                                                                          |
+| ↳ Upscale Factor           | `2.0`                 | Scale multiplier (0.25–4×)                                                                                                                                                                                                                                        |
+| ↳ Upscale Blend            | `0.35`                | Blending factor between original and upscaled features                                                                                                                                                                                                            |
 
 ## API Reference
 
 ### `POST /api/generate`
+
 Submits an image generation job. Handles AI prompt engineering via Gemini or RunPod Qwen, then routes to the selected model backend.
 
 - **FLUX.1-dev**: Submits to RunningHub workflow. Returns `{ taskId, model: 'flux-dev', prompt }`.
@@ -175,15 +180,19 @@ Submits an image generation job. Handles AI prompt engineering via Gemini or Run
 - **FLUX.2-klein**: Submits to RunPod FLUX.2-klein Serverless endpoint with preset, multi-LoRA `loras`, `lora_scale_mode`, `max_sequence_length`, optional 2nd pass options, and optional upscale options. Returns `{ jobId, model: 'flux-klein', prompt }`.
 
 ### `POST /api/zimage-check`
+
 Polls a RunPod job (Z-Image or FLUX.2-klein) for completion. When the job completes, downloads the image from the S3 presigned URL and saves it to the output directory. Returns `{ status, filename }`.
 
 ### `POST /api/upscale`
+
 Handles multipart form uploads. Encodes images if requested, uploads to S3, and submits to specialized RunningHub upscaling workflows.
 
 ### `POST /api/check`
+
 Polls RunningHub task status and handles post-processing (image download + optional TT-Decode).
 
 ### `GET /api/images/[...path]`
+
 Serves generated/upscaled images from the mounted output volume.
 
 ## Project Structure
