@@ -15,7 +15,7 @@
 - **Environment-backed API Keys** — API keys can be pre-configured in `.env` and are automatically used as defaults. UI fields override them on a per-session basis.
 - **Modern Tabbed UI** — Segmented control interface with smooth sliding indicators for seamless switching between Generation and Upscaling modes.
 - **300 Curated Locations** — Module-level Fisher-Yates shuffled queue of 300 unique locations ensures zero repetition across large batches.
-- **Flexible Dimensions** — 9 aspect ratio presets with automatic 16px-aligned dimension calculation.
+- **Flexible Dimensions** — 9 aspect ratio presets with automatic 16px-aligned dimension calculation for FLUX.1-dev and Z-Image workflows.
 - **Containerized Deployment** — Fully Dockerized with environment-based configuration for secrets and server limits.
 
 ## Architecture
@@ -47,7 +47,7 @@ The application runs as a single SvelteKit container. API routes handle server-s
 6. Optionally, a **High-Res Refinement** second pass is run server-side before delivery.
 
 ### Generation Flow — FLUX.2-klein (RunPod Serverless)
-1. User selects **FLUX.2-klein** model, chooses a quality preset, and optionally sets inference steps, LoRA scale, seed, detail refinement, and upscaling options.
+1. User selects **FLUX.2-klein** model, chooses a quality preset, configures a multi-LoRA stack, and optionally sets seed, max sequence length, detail refinement, and upscaling options.
 2. Tasks are added to the **Persistent Queue** with the same AI prompt engineering pipeline.
 3. Background processor picks the next task:
     - AI synthesizes the prompt using the **FLUX Prompt Director** — a specialized system prompt tuned for FLUX.2 [klein] 9B (camera/film language, avoids SDXL boilerplate).
@@ -129,7 +129,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 |-----------|---------|-------------|
 | LoRA URL | *(empty)* | URL to a `.safetensors` LoRA file |
 | LoRA Trigger Word | *(empty)* | Trigger word the LoRA was trained on (e.g. `TOK`). Injected as a hard rule into both prompt engineering steps. |
-| Aspect Ratio | `1:1` | 9 presets — dimensions are auto-calculated at 16px alignment |
+| Aspect Ratio | `1:1` | 9 presets — dimensions are auto-calculated at 16px alignment (FLUX.1-dev and Z-Image) |
 | Output Sub-directory | `generations` | Sub-folder inside `/mount` where results are saved |
 | Filename Prefix | `image` | Prefix applied to all saved filenames |
 
@@ -152,15 +152,17 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | Quality Preset | `realistic_character` | Preset bundle: steps, guidance, shift, and resolution tuned for the use-case. Options: `realistic_character`, `portrait_hd`, `cinematic_full`, `fast_preview`, `maximum_quality`, `character_portrait_best`, `character_portrait_vertical`, `character_cinematic` |
-| Inference Steps | `35` | Number of diffusion steps — use 35–50 for the base (undistilled) model |
-| LoRA Scale | `0.85` | LoRA adapter strength (0.75–0.9 recommended) |
+| LoRA Stack | 1 empty row | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale |
 | Seed | `-1` (random) | Fixed seed for reproducibility |
+| Max Sequence Length | `512` | Text encoder token cap (`max_sequence_length`) |
+| LoRA Scale Mode | `absolute` | Multi-LoRA scale interpretation: `absolute` or `normalized` |
 | Enable Detail Refinement | off | Runs a second inference pass to sharpen fine details and textures |
 | ↳ Refinement Strength | `0.2` | Img2img denoising strength for the refinement pass |
 | ↳ Refinement Steps | `12` | Inference steps for the refinement pass |
 | ↳ Refinement Guidance | `1.0` | CFG scale for the refinement pass |
+| ↳ 2nd Pass LoRA Multiplier | `1.0` | Scales LoRA influence during pass 2 (`second_pass_lora_scale_multiplier`) |
 | Enable Upscaling | off | Upscales the generated image server-side before delivery |
-| ↳ Upscale Factor | `2.0` | Scale multiplier (1.5–4×) |
+| ↳ Upscale Factor | `2.0` | Scale multiplier (0.25–4×) |
 | ↳ Upscale Blend | `0.35` | Blending factor between original and upscaled features |
 
 ## API Reference
@@ -170,7 +172,7 @@ Submits an image generation job. Handles AI prompt engineering via Gemini or Run
 
 - **FLUX.1-dev**: Submits to RunningHub workflow. Returns `{ taskId, model: 'flux-dev', prompt }`.
 - **Z-Image**: Submits to RunPod Z-Image Serverless endpoint. Returns `{ jobId, model: 'z-image', prompt }`.
-- **FLUX.2-klein**: Submits to RunPod FLUX.2-klein Serverless endpoint with preset, LoRA, optional 2nd pass, and optional upscale parameters. Returns `{ jobId, model: 'flux-klein', prompt }`.
+- **FLUX.2-klein**: Submits to RunPod FLUX.2-klein Serverless endpoint with preset, multi-LoRA `loras`, `lora_scale_mode`, `max_sequence_length`, optional 2nd pass options, and optional upscale options. Returns `{ jobId, model: 'flux-klein', prompt }`.
 
 ### `POST /api/zimage-check`
 Polls a RunPod job (Z-Image or FLUX.2-klein) for completion. When the job completes, downloads the image from the S3 presigned URL and saves it to the output directory. Returns `{ status, filename }`.

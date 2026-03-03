@@ -22,6 +22,8 @@ export const POST: RequestHandler = async ({ request }) => {
         useCustomPrompt = false,
         // Shared extra params
         loraKeyword = '',
+        // FLUX.2-klein multi-LoRA stack (array of { url, keyword, scale })
+        kleinLoras = [],
         // Z-Image / FLUX.2-klein extra params
         steps = 30,
         guidanceScale = 3.5,
@@ -39,9 +41,12 @@ export const POST: RequestHandler = async ({ request }) => {
         klein_second_pass_strength = 0.2,
         klein_second_pass_steps = 12,
         klein_second_pass_guidance_scale = 1.0,
+        klein_second_pass_lora_scale_multiplier = 1.0,
         klein_enable_upscale = false,
         klein_upscale_factor = 2.0,
         klein_upscale_blend = 0.35,
+        klein_max_sequence_length = 512,
+        klein_lora_scale_mode = 'absolute',
         // RunningHub ZImage Upscale + Face Detailer params
         rhub_zimage_style = 'None',
         rhub_zimage_width = 896,
@@ -71,6 +76,19 @@ export const POST: RequestHandler = async ({ request }) => {
 
     try {
         let finalPrompt = '';
+
+        const normalizedKleinLoras = (Array.isArray(kleinLoras) ? kleinLoras : [])
+            .map((entry: any) => ({
+                url: typeof entry?.url === 'string' ? entry.url.trim() : '',
+                keyword: typeof entry?.keyword === 'string' ? entry.keyword.trim() : '',
+                scale: typeof entry?.scale === 'number' && Number.isFinite(entry.scale) ? entry.scale : 0.85,
+            }));
+        const kleinTriggerWords = Array.from(
+            new Set(normalizedKleinLoras.map((l) => l.keyword).filter(Boolean))
+        );
+        const effectiveLoraKeyword = model === 'flux-klein'
+            ? (kleinTriggerWords.join(', ') || (typeof loraKeyword === 'string' ? loraKeyword.trim() : ''))
+            : (typeof loraKeyword === 'string' ? loraKeyword.trim() : '');
 
         if (useCustomPrompt) {
             if (!customPrompt.trim()) {
@@ -129,7 +147,7 @@ Rules:
 - Describe specific clothing that fits the location and mood.
 - Include time of day and lighting quality.
 Location: ${location}
-Subject: ${loraKeyword ? `${loraKeyword} — ` : ''}${subject}`,
+Subject: ${effectiveLoraKeyword ? `${effectiveLoraKeyword} — ` : ''}${subject}`,
                 "Describe the scene in 2-3 vivid sentences: composition, activity, clothing, and lighting.",
                 1.3
             );
@@ -263,11 +281,11 @@ Avoid excessive technical jargon. Use only what reinforces the visual.
 Return **only** the following sections, nothing else:
 
 **OPTIMIZED PROMPT:**
-<one paragraph, subject-first, lighting explicit, atmosphere clear; optional Style/Mood lines only if helpful>${loraKeyword ? `\n\nYou MUST include the exact trigger word "${loraKeyword}" in the prompt.` : ''}
+<one paragraph, subject-first, lighting explicit, atmosphere clear; optional Style/Mood lines only if helpful>${kleinTriggerWords.length > 0 ? `\n\nYou MUST include each exact trigger word in the prompt: ${kleinTriggerWords.map(w => `"${w}"`).join(', ')}.` : ''}
 
 Do not include analysis, bullet explanations, or extra commentary.`;
 
-                finalUserMessage = `Subject: ${loraKeyword ? `${loraKeyword} — ` : ''}${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate the optimized FLUX.2 [klein] 9B prompt.`;
+                finalUserMessage = `Subject: ${effectiveLoraKeyword ? `${effectiveLoraKeyword} — ` : ''}${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate the optimized FLUX.2 [klein] 9B prompt.`;
             } else if (model === 'z-image' || model === 'rhub-zimage') {
                 finalSystemPrompt = `# Role
 You are the Z-Image Turbo Prompt Architect. Your goal is to transform simple user ideas into "Single-Stream DiT" optimized prompts for the Z-Image Turbo 6B model.
@@ -293,7 +311,7 @@ When the user gives a concept, generate a prompt using this 4-Layer framework:
 # Response Format
 1. **The Optimized Prompt**: A single block of text ready for copy-pasting.`;
 
-                finalUserMessage = `Concept: ${loraKeyword ? `${loraKeyword} — ` : ''}${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate the optimized prompt.`;
+                finalUserMessage = `Concept: ${effectiveLoraKeyword ? `${effectiveLoraKeyword} — ` : ''}${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate the optimized prompt.`;
             } else {
                 // Original Generic FLUX Prompt used for flux-dev
                 finalSystemPrompt = `You are an expert FLUX.1-dev prompt engineer.
@@ -304,9 +322,9 @@ RULES:
 2. FORBIDDEN: "leather jacket", "neon lights", "nightclub", "flash photography", "brick wall", "bokeh".
 3. Focus on authentic everyday realism: natural textures, real fabrics, ambient lighting.
 4. Include specific details: fabric types, colors, accessories, environment textures.
-5. Output format: PROMPT: <single detailed prompt here>${loraKeyword ? `\n6. You MUST include the exact trigger word "${loraKeyword}" in the prompt as the subject's name/identifier — do not paraphrase or omit it.` : ''}`;
+5. Output format: PROMPT: <single detailed prompt here>${effectiveLoraKeyword ? `\n6. You MUST include the exact trigger word "${effectiveLoraKeyword}" in the prompt as the subject's name/identifier — do not paraphrase or omit it.` : ''}`;
 
-                finalUserMessage = `Subject: ${loraKeyword ? `${loraKeyword} — ` : ''}${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate one detailed, unique FLUX prompt.`;
+                finalUserMessage = `Subject: ${effectiveLoraKeyword ? `${effectiveLoraKeyword} — ` : ''}${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate one detailed, unique FLUX prompt.`;
             }
 
             const responseText = await askAI(finalSystemPrompt, finalUserMessage, 1.0);
@@ -366,6 +384,30 @@ RULES:
 
             console.log(`[FLUX-Klein] Submitting: "${finalPrompt.substring(0, 80)}..." preset=${preset} seed=${effectiveSeed}`);
 
+            // Build multi-LoRA array from kleinLoras entries that have a URL
+            const activeLoras = normalizedKleinLoras
+                .filter(l => l.url?.trim());
+            const legacyLoraUrl = typeof loraUrl === 'string' ? loraUrl.trim() : '';
+            const lorasForPayload = activeLoras.length > 0
+                ? activeLoras
+                : (legacyLoraUrl ? [{ url: legacyLoraUrl, keyword: effectiveLoraKeyword, scale: loraScale }] : []);
+            const lorasPayload = lorasForPayload.length > 0
+                ? {
+                    loras: lorasForPayload.map((l, i) => {
+                        const safeKeyword = l.keyword
+                            .toLowerCase()
+                            .replace(/[^a-z0-9_-]+/g, '_')
+                            .replace(/^_+|_+$/g, '')
+                            .slice(0, 40);
+                        return {
+                            path: l.url.trim(),
+                            scale: l.scale,
+                            adapter_name: safeKeyword ? `${safeKeyword}_${i}` : `flux_lora_${i}`,
+                        };
+                    })
+                }
+                : {};
+
             const kleinRes = await fetch(`${endpointUrl}/run`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${runpodKey}` },
@@ -373,19 +415,18 @@ RULES:
                     input: {
                         prompt: finalPrompt,
                         preset,
-                        ...(loraUrl ? { lora_path: loraUrl } : {}),
-                        width,
-                        height,
-                        num_inference_steps: steps,
+                        ...lorasPayload,
                         seed: effectiveSeed,
-                        lora_scale: loraScale,
                         output_format: 'jpeg',
                         return_type: 's3',
+                        max_sequence_length: klein_max_sequence_length,
+                        lora_scale_mode: klein_lora_scale_mode,
                         ...(klein_enable_2nd_pass ? {
                             enable_2nd_pass: true,
                             second_pass_strength: klein_second_pass_strength,
                             second_pass_steps: klein_second_pass_steps,
                             second_pass_guidance_scale: klein_second_pass_guidance_scale,
+                            second_pass_lora_scale_multiplier: klein_second_pass_lora_scale_multiplier,
                         } : {}),
                         ...(klein_enable_upscale ? {
                             enable_upscale: true,

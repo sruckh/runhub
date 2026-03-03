@@ -40,9 +40,23 @@
     let kleinSecondPassStrength = $state(0.2);
     let kleinSecondPassSteps = $state(12);
     let kleinSecondPassGuidanceScale = $state(1.0);
+    let kleinSecondPassLoraScaleMultiplier = $state(1.0);
     let kleinEnableUpscale = $state(false);
     let kleinUpscaleFactor = $state(2.0);
     let kleinUpscaleBlend = $state(0.35);
+    let kleinMaxSequenceLength = $state(512);
+    let kleinLoraScaleMode = $state<'absolute' | 'normalized'>('absolute');
+
+    // FLUX.2-klein multi-LoRA stack
+    interface KleinLora { url: string; keyword: string; scale: number; }
+    let kleinLoras = $state<KleinLora[]>([{ url: '', keyword: '', scale: 0.85 }]);
+
+    function addKleinLora() {
+        kleinLoras = [...kleinLoras, { url: '', keyword: '', scale: 0.85 }];
+    }
+    function removeKleinLora(i: number) {
+        if (kleinLoras.length > 1) kleinLoras = kleinLoras.filter((_, idx) => idx !== i);
+    }
 
     // RunningHub ZImage Upscale + Face Detailer params
     let rhubZimageStyle = $state('None');
@@ -113,6 +127,19 @@
         { id: 'character_portrait_vertical', label: 'Character Portrait (Vertical)' },
         { id: 'character_cinematic', label: 'Character Cinematic' }
     ];
+    const kleinPresetDefaults: Record<string, { steps: number; guidance: number; shift: number; width: number; height: number }> = {
+        realistic_character: { steps: 35, guidance: 2.0, shift: 1.5, width: 1024, height: 1024 },
+        portrait_hd: { steps: 40, guidance: 2.0, shift: 1.5, width: 1024, height: 1536 },
+        cinematic_full: { steps: 35, guidance: 2.5, shift: 1.5, width: 1536, height: 1024 },
+        fast_preview: { steps: 20, guidance: 2.0, shift: 1.5, width: 1024, height: 1024 },
+        maximum_quality: { steps: 50, guidance: 2.5, shift: 1.0, width: 1024, height: 1024 },
+        character_portrait_best: { steps: 45, guidance: 2.2, shift: 2.5, width: 1024, height: 1024 },
+        character_portrait_vertical: { steps: 45, guidance: 2.0, shift: 2.0, width: 896, height: 1152 },
+        character_cinematic: { steps: 40, guidance: 2.5, shift: 2.5, width: 1344, height: 896 }
+    };
+    function getKleinPresetDefaults(presetId: string) {
+        return kleinPresetDefaults[presetId] || kleinPresetDefaults.realistic_character;
+    }
 
     const rhubZimageStyles = [
         'None', 'Phone Photo', 'Casual Photo', 'Vintage Photo', 'Portra Film Photo',
@@ -179,7 +206,10 @@
             type: 'generate',
             model,
             loraUrl,
-            loraKeyword,
+            loraKeyword: model === 'flux-klein'
+                ? kleinLoras.map(l => l.keyword).map(k => k.trim()).filter(Boolean).join(', ')
+                : loraKeyword,
+            kleinLoras: model === 'flux-klein' ? kleinLoras : undefined,
             subject,
             customPrompt,
             useCustomPrompt,
@@ -205,9 +235,12 @@
             klein_second_pass_strength: kleinSecondPassStrength,
             klein_second_pass_steps: kleinSecondPassSteps,
             klein_second_pass_guidance_scale: kleinSecondPassGuidanceScale,
+            klein_second_pass_lora_scale_multiplier: kleinSecondPassLoraScaleMultiplier,
             klein_enable_upscale: kleinEnableUpscale,
             klein_upscale_factor: kleinUpscaleFactor,
             klein_upscale_blend: kleinUpscaleBlend,
+            klein_max_sequence_length: kleinMaxSequenceLength,
+            klein_lora_scale_mode: kleinLoraScaleMode,
             rhub_zimage_style: rhubZimageStyle,
             rhub_zimage_width: rhubZimageWidth,
             rhub_zimage_height: rhubZimageHeight,
@@ -638,16 +671,46 @@
                 </div>
                 {/if}
 
-                <div class="grid">
-                    <div class="field">
-                        <label for="loraUrl">LoRA URL</label>
-                        <input type="text" id="loraUrl" bind:value={loraUrl} placeholder="https://..." />
+                {#if model === 'flux-klein'}
+                    <div class="multi-lora-section">
+                        <div class="multi-lora-header">
+                            <span class="multi-lora-label">LoRA Stack</span>
+                            <button type="button" class="add-lora-btn" onclick={addKleinLora}>+ Add LoRA</button>
+                        </div>
+                        {#each kleinLoras as lora, i}
+                            <div class="lora-entry">
+                                <div class="lora-entry-fields">
+                                    <div class="field">
+                                        <label for="kleinLoraUrl_{i}">LoRA URL {kleinLoras.length > 1 ? i + 1 : ''}</label>
+                                        <input type="text" id="kleinLoraUrl_{i}" bind:value={lora.url} placeholder="https://..." />
+                                    </div>
+                                    <div class="field">
+                                        <label for="kleinLoraKeyword_{i}">Trigger Word</label>
+                                        <input type="text" id="kleinLoraKeyword_{i}" bind:value={lora.keyword} placeholder="e.g. TOK" />
+                                    </div>
+                                    <div class="field lora-scale-inline">
+                                        <label for="kleinLoraScale_{i}">Scale</label>
+                                        <input type="number" id="kleinLoraScale_{i}" bind:value={lora.scale} min="0" max="2" step="0.05" />
+                                    </div>
+                                </div>
+                                {#if kleinLoras.length > 1}
+                                    <button type="button" class="remove-lora-btn" onclick={() => removeKleinLora(i)}>×</button>
+                                {/if}
+                            </div>
+                        {/each}
                     </div>
-                    <div class="field">
-                        <label for="loraKeyword">LoRA Trigger Word</label>
-                        <input type="text" id="loraKeyword" bind:value={loraKeyword} placeholder="e.g. K1mScum" />
+                {:else}
+                    <div class="grid">
+                        <div class="field">
+                            <label for="loraUrl">LoRA URL</label>
+                            <input type="text" id="loraUrl" bind:value={loraUrl} placeholder="https://..." />
+                        </div>
+                        <div class="field">
+                            <label for="loraKeyword">LoRA Trigger Word</label>
+                            <input type="text" id="loraKeyword" bind:value={loraKeyword} placeholder="e.g. K1mScum" />
+                        </div>
                     </div>
-                </div>
+                {/if}
 
                 <!-- Custom Prompt Toggle -->
                 <div class="field toggle-field">
@@ -676,7 +739,7 @@
                         <label for="numPrompts">Number of Prompts</label>
                         <input type="number" id="numPrompts" bind:value={numPrompts} min="1" max="50" />
                     </div>
-                    {#if model !== 'rhub-zimage'}
+                    {#if model === 'flux-dev' || model === 'z-image'}
                     <div class="field">
                         <label for="aspectRatio">Aspect Ratio</label>
                         <select id="aspectRatio" bind:value={aspectRatio}>
@@ -740,13 +803,16 @@
                                 {/each}
                             </select>
                         </div>
+                        <div class="preset-meta">
+                            Preset defaults: {getKleinPresetDefaults(preset).steps} steps, guidance {getKleinPresetDefaults(preset).guidance}, shift {getKleinPresetDefaults(preset).shift}, {getKleinPresetDefaults(preset).width}×{getKleinPresetDefaults(preset).height}
+                        </div>
                     {/if}
                     <div class="grid">
-                        <div class="field">
-                            <label for="zimageSteps">Inference Steps</label>
-                            <input type="number" id="zimageSteps" bind:value={zimageSteps} min="10" max="50" />
-                        </div>
                         {#if model === 'z-image'}
+                            <div class="field">
+                                <label for="zimageSteps">Inference Steps</label>
+                                <input type="number" id="zimageSteps" bind:value={zimageSteps} min="10" max="50" />
+                            </div>
                             <div class="field">
                                 <label for="guidanceScale">Guidance Scale</label>
                                 <input type="number" id="guidanceScale" bind:value={guidanceScale} min="1" max="10" step="0.1" />
@@ -756,14 +822,29 @@
                                 <input type="number" id="shift" bind:value={shift} min="0.5" max="10" step="0.1" />
                             </div>
                         {/if}
+                        {#if model === 'z-image'}
                         <div class="field">
                             <label for="loraScale">LoRA Scale</label>
                             <input type="number" id="loraScale" bind:value={loraScale} min="0" max="2" step="0.05" />
                         </div>
+                        {/if}
                         <div class="field">
                             <label for="zimageSeed">Seed (−1 = random)</label>
                             <input type="number" id="zimageSeed" bind:value={zimageSeed} min="-1" />
                         </div>
+                        {#if model === 'flux-klein'}
+                            <div class="field">
+                                <label for="kleinMaxSequenceLength">Max Sequence Length</label>
+                                <input type="number" id="kleinMaxSequenceLength" bind:value={kleinMaxSequenceLength} min="1" max="512" step="1" />
+                            </div>
+                            <div class="field">
+                                <label for="kleinLoraScaleMode">LoRA Scale Mode</label>
+                                <select id="kleinLoraScaleMode" bind:value={kleinLoraScaleMode}>
+                                    <option value="absolute">absolute</option>
+                                    <option value="normalized">normalized</option>
+                                </select>
+                            </div>
+                        {/if}
                     </div>
 
                     {#if model === 'flux-klein'}
@@ -789,7 +870,11 @@
                                 </div>
                                 <div class="field">
                                     <label for="kleinSecondPassGuidanceScale">Refinement Guidance</label>
-                                    <input type="number" id="kleinSecondPassGuidanceScale" bind:value={kleinSecondPassGuidanceScale} min="1" max="5" step="0.1" />
+                                    <input type="number" id="kleinSecondPassGuidanceScale" bind:value={kleinSecondPassGuidanceScale} min="0.1" max="5" step="0.1" />
+                                </div>
+                                <div class="field">
+                                    <label for="kleinSecondPassLoraScaleMultiplier">2nd Pass LoRA Multiplier</label>
+                                    <input type="number" id="kleinSecondPassLoraScaleMultiplier" bind:value={kleinSecondPassLoraScaleMultiplier} min="0" max="2" step="0.05" />
                                 </div>
                             </div>
                         {/if}
@@ -808,7 +893,7 @@
                             <div class="grid second-pass-params">
                                 <div class="field">
                                     <label for="kleinUpscaleFactor">Upscale Factor</label>
-                                    <input type="number" id="kleinUpscaleFactor" bind:value={kleinUpscaleFactor} min="1.5" max="4" step="0.5" />
+                                    <input type="number" id="kleinUpscaleFactor" bind:value={kleinUpscaleFactor} min="0.25" max="4" step="0.25" />
                                 </div>
                                 <div class="field">
                                     <label for="kleinUpscaleBlend">Upscale Blend</label>
@@ -1525,5 +1610,80 @@
     @keyframes slideUp {
         from { transform: translateX(-50%) translateY(20px); opacity: 0; }
         to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+
+    /* Multi-LoRA Stack (FLUX.2-klein) */
+    .multi-lora-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .multi-lora-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .multi-lora-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .add-lora-btn {
+        width: auto;
+        min-height: 34px;
+        padding: 6px 14px;
+        font-size: 0.8rem;
+        background: #eff6ff;
+        color: #2563eb;
+        border: 1px solid #bfdbfe;
+        border-radius: 6px;
+        font-weight: 600;
+    }
+    .add-lora-btn:hover { background: #dbeafe; opacity: 1; }
+    .lora-entry {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        padding: 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+    }
+    .lora-entry-fields {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        gap: 10px;
+        align-items: end;
+    }
+    .lora-scale-inline input { max-width: 90px; }
+    .remove-lora-btn {
+        width: 32px;
+        min-height: 32px;
+        height: 32px;
+        padding: 0;
+        flex-shrink: 0;
+        background: #fee2e2;
+        color: #dc2626;
+        border-radius: 6px;
+        font-size: 1.2rem;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .remove-lora-btn:hover { background: #fecaca; opacity: 1; }
+    .preset-meta {
+        margin-top: -2px;
+        margin-bottom: 4px;
+        font-size: 0.85rem;
+        color: #64748b;
+    }
+
+    @media (max-width: 600px) {
+        .lora-entry-fields { grid-template-columns: 1fr; }
+        .lora-scale-inline input { max-width: 100%; }
     }
 </style>
