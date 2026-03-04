@@ -15,6 +15,7 @@
     let outputDir = $state('generations');
     let prefix = $state('image');
     let aspectRatio = $state('1:1');
+    let kleinAspectRatio = $state('1:1');
     let geminiKey = $state(_gk);
     let rhubKey = $state(_rk);
     let runpodKey = $state(_rpk);
@@ -116,6 +117,20 @@
     });
 
     const aspectRatios = ['1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4'];
+    const kleinAspectRatios = [
+        { ratio: '21:9', width: 1024, height: 448,  group: 'Landscape' },
+        { ratio: '2:1',  width: 1024, height: 512,  group: 'Landscape' },
+        { ratio: '16:9', width: 1024, height: 576,  group: 'Landscape' },
+        { ratio: '3:2',  width: 1024, height: 672,  group: 'Landscape' },
+        { ratio: '4:3',  width: 1024, height: 768,  group: 'Landscape' },
+        { ratio: '5:4',  width: 1024, height: 832,  group: 'Landscape' },
+        { ratio: '1:1',  width: 1024, height: 1024, group: 'Square'    },
+        { ratio: '4:5',  width: 832,  height: 1024, group: 'Portrait'  },
+        { ratio: '3:4',  width: 768,  height: 1024, group: 'Portrait'  },
+        { ratio: '2:3',  width: 672,  height: 1024, group: 'Portrait'  },
+        { ratio: '9:16', width: 576,  height: 1024, group: 'Portrait'  },
+        { ratio: '1:2',  width: 512,  height: 1024, group: 'Portrait'  },
+    ];
     const kleinPresets = [
         { id: 'realistic_character', label: 'Realistic Character' },
         { id: 'portrait_hd', label: 'Portrait HD' },
@@ -241,6 +256,9 @@
             klein_upscale_blend: kleinUpscaleBlend,
             klein_max_sequence_length: kleinMaxSequenceLength,
             klein_lora_scale_mode: kleinLoraScaleMode,
+            kleinAspectRatio,
+            klein_width: (kleinAspectRatios.find(ar => ar.ratio === kleinAspectRatio) ?? { width: 1024, height: 1024 }).width,
+            klein_height: (kleinAspectRatios.find(ar => ar.ratio === kleinAspectRatio) ?? { width: 1024, height: 1024 }).height,
             rhub_zimage_style: rhubZimageStyle,
             rhub_zimage_width: rhubZimageWidth,
             rhub_zimage_height: rhubZimageHeight,
@@ -826,6 +844,28 @@
                                 <input type="number" id="shift" bind:value={shift} min="0.5" max="10" step="0.1" />
                             </div>
                         {/if}
+                        {#if model === 'flux-klein'}
+                        <div class="field">
+                            <label for="kleinAspectRatio">Aspect Ratio</label>
+                            <select id="kleinAspectRatio" bind:value={kleinAspectRatio}>
+                                <optgroup label="Landscape">
+                                    {#each kleinAspectRatios.filter(ar => ar.group === 'Landscape') as ar}
+                                        <option value={ar.ratio}>{ar.ratio} — {ar.width}×{ar.height}</option>
+                                    {/each}
+                                </optgroup>
+                                <optgroup label="Square">
+                                    {#each kleinAspectRatios.filter(ar => ar.group === 'Square') as ar}
+                                        <option value={ar.ratio}>{ar.ratio} — {ar.width}×{ar.height}</option>
+                                    {/each}
+                                </optgroup>
+                                <optgroup label="Portrait">
+                                    {#each kleinAspectRatios.filter(ar => ar.group === 'Portrait') as ar}
+                                        <option value={ar.ratio}>{ar.ratio} — {ar.width}×{ar.height}</option>
+                                    {/each}
+                                </optgroup>
+                            </select>
+                        </div>
+                        {/if}
                         <div class="field">
                             <label for="zimageSeed">Seed (−1 = random)</label>
                             <input type="number" id="zimageSeed" bind:value={zimageSeed} min="-1" />
@@ -1021,7 +1061,7 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else}{task.aspectRatio}{/if}
+                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else}{task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'upscale'}

@@ -16,7 +16,7 @@
 - **Environment-backed API Keys** — API keys can be pre-configured in `.env` and are automatically used as defaults. UI fields override them on a per-session basis.
 - **Modern Tabbed UI** — Segmented control interface with smooth sliding indicators for seamless switching between Generation and Upscaling modes.
 - **300 Curated Locations** — Module-level Fisher-Yates shuffled queue of 300 unique locations ensures zero repetition across large batches.
-- **Flexible Dimensions** — 9 aspect ratio presets with automatic 16px-aligned dimension calculation for FLUX.1-dev and Z-Image workflows.
+- **Flexible Dimensions** — 9 aspect ratio presets for FLUX.1-dev and Z-Image (16px-aligned auto-calculation), plus 12 dedicated aspect ratio presets for FLUX.2-klein (landscape, square, and portrait — all ~1K resolution, 32px-aligned).
 - **Containerized Deployment** — Fully Dockerized with environment-based configuration for secrets and server limits.
 
 ## Architecture
@@ -132,7 +132,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 | Parameter            | Default       | Description                                                                                                    |
 | -------------------- | ------------- | -------------------------------------------------------------------------------------------------------------- |
-| Aspect Ratio         | `1:1`         | 9 presets — dimensions are auto-calculated at 16px alignment (FLUX.1-dev and Z-Image)                          |
+| Aspect Ratio         | `1:1`         | 9 presets — dimensions are auto-calculated at 16px alignment (FLUX.1-dev and Z-Image only)                     |
 | Output Sub-directory | `generations` | Sub-folder inside `/mount` where results are saved                                                             |
 | Filename Prefix      | `image`       | Prefix applied to all saved filenames                                                                          |
 
@@ -155,6 +155,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | Parameter                  | Default               | Description                                                                                                                                                                                                                                                       |
 | -------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Quality Preset             | `realistic_character` | Preset bundle: steps, guidance, shift, and resolution tuned for the use-case. Options: `realistic_character`, `portrait_hd`, `cinematic_full`, `fast_preview`, `maximum_quality`, `character_portrait_best`, `character_portrait_vertical`, `character_cinematic` |
+| Aspect Ratio               | `1:1`                 | 12 presets (landscape, square, portrait) — all ~1K resolution, 32px-aligned. Landscape: `21:9` (1024×448), `2:1` (1024×512), `16:9` (1024×576), `3:2` (1024×672), `4:3` (1024×768), `5:4` (1024×832). Square: `1:1` (1024×1024). Portrait: `4:5` (832×1024), `3:4` (768×1024), `2:3` (672×1024), `9:16` (576×1024), `1:2` (512×1024). |
 | LoRA Stack                 | 1 empty row           | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale.                                                                                                                                                                                 |
 | Seed                       | `-1` (random)         | Fixed seed for reproducibility.                                                                                                                                                                                                                                   |
 | Prompt Length Limit        | `512`                 | Text encoder token cap (`max_sequence_length`).                                                                                                                                                                                                                   |
@@ -176,7 +177,7 @@ Submits an image generation job. Handles AI prompt engineering via Gemini or Run
 
 - **FLUX.1-dev**: Submits to RunningHub workflow. Returns `{ taskId, model: 'flux-dev', prompt }`.
 - **Z-Image**: Submits to RunPod Z-Image Serverless endpoint with multi-LoRA `loras` array. Returns `{ jobId, model: 'z-image', prompt }`.
-- **FLUX.2-klein**: Submits to RunPod FLUX.2-klein Serverless endpoint with preset, multi-LoRA `loras`, `lora_scale_mode`, `max_sequence_length`, optional 2nd pass options, and optional upscale options. Returns `{ jobId, model: 'flux-klein', prompt }`.
+- **FLUX.2-klein**: Submits to RunPod FLUX.2-klein Serverless endpoint with preset, explicit `width`/`height` from the selected aspect ratio, multi-LoRA `loras`, `lora_scale_mode`, `max_sequence_length`, optional 2nd pass options, and optional upscale options. Returns `{ jobId, model: 'flux-klein', prompt }`.
 
 ### `POST /api/zimage-check`
 

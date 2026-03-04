@@ -47,6 +47,8 @@ export const POST: RequestHandler = async ({ request }) => {
     klein_upscale_blend = 0.35,
     klein_max_sequence_length = 512,
     klein_lora_scale_mode = "absolute",
+    klein_width = 1024,
+    klein_height = 1024,
     // RunningHub ZImage Upscale + Face Detailer params
     rhub_zimage_style = "None",
     rhub_zimage_width = 896,
@@ -446,6 +448,8 @@ RULES:
           input: {
             prompt: finalPrompt,
             preset,
+            width: klein_width,
+            height: klein_height,
             ...lorasPayload,
             seed: effectiveSeed,
             output_format: "jpeg",
