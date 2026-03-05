@@ -5,6 +5,8 @@
 
     // untrack: read env-backed defaults once at init without reactive tracking
     const { geminiKey: _gk = '', rhubKey: _rk = '', runpodKey: _rpk = '' } = untrack(() => data.envKeys ?? {});
+    const lorasKlein: { name: string; url: string }[] = untrack(() => data.lorasKlein ?? []);
+    const lorasZimage: { name: string; url: string }[] = untrack(() => data.lorasZimage ?? []);
 
     let loraUrl = $state('');
     let loraKeyword = $state('');
@@ -49,15 +51,31 @@
     let kleinLoraScaleMode = $state<'absolute' | 'normalized'>('absolute');
 
     // FLUX.2-klein multi-LoRA stack
-    interface KleinLora { url: string; keyword: string; scale: number; }
-    let kleinLoras = $state<KleinLora[]>([{ url: '', keyword: '', scale: 0.85 }]);
+    interface KleinLora { url: string; keyword: string; scale: number; preset: string; }
+
+    function _defaultLora(_list: { name: string; url: string }[]): KleinLora {
+        return { url: '', keyword: '', scale: 0.85, preset: '' };
+    }
+
+    let kleinLoras = $state<KleinLora[]>([_defaultLora(lorasKlein)]);
 
     function addKleinLora() {
-        kleinLoras = [...kleinLoras, { url: '', keyword: '', scale: 0.85 }];
+        const list = model === 'z-image' ? lorasZimage : lorasKlein;
+        kleinLoras = [...kleinLoras, _defaultLora(list)];
     }
     function removeKleinLora(i: number) {
         if (kleinLoras.length > 1) kleinLoras = kleinLoras.filter((_, idx) => idx !== i);
     }
+
+    // Reset LoRA stack when switching between models with different LoRA lists
+    let _prevLoraModel = model;
+    $effect(() => {
+        const m = model;
+        if ((m === 'flux-klein' || m === 'z-image') && m !== _prevLoraModel) {
+            kleinLoras = [{ url: '', keyword: '', scale: 0.85, preset: '' }];
+        }
+        _prevLoraModel = m;
+    });
 
     // RunningHub ZImage Upscale + Face Detailer params
     let rhubZimageStyle = $state('None');
@@ -696,8 +714,24 @@
                             <button type="button" class="add-lora-btn" onclick={addKleinLora}>+ Add LoRA</button>
                         </div>
                         {#each kleinLoras as lora, i}
+                            {@const loraList = model === 'z-image' ? lorasZimage : lorasKlein}
                             <div class="lora-entry">
                                 <div class="lora-entry-fields">
+                                    {#if loraList.length > 0}
+                                        <div class="field">
+                                            <label for="kleinLoraPreset_{i}">LoRA Style {kleinLoras.length > 1 ? i + 1 : ''}</label>
+                                            <select id="kleinLoraPreset_{i}" bind:value={lora.preset} onchange={() => {
+                                                if (lora.preset) {
+                                                    lora.url = loraList.find(l => l.name === lora.preset)?.url ?? lora.url;
+                                                }
+                                            }}>
+                                                <option value="">— select a style —</option>
+                                                {#each loraList as opt}
+                                                    <option value={opt.name}>{opt.name}</option>
+                                                {/each}
+                                            </select>
+                                        </div>
+                                    {/if}
                                     <div class="field">
                                         <label for="kleinLoraUrl_{i}">LoRA URL {kleinLoras.length > 1 ? i + 1 : ''}</label>
                                         <input type="text" id="kleinLoraUrl_{i}" bind:value={lora.url} placeholder="https://..." />

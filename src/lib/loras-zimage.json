@@ -1,0 +1,9 @@
+[
+  {"name":"ChiaroscuroCinematiLighting","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/ChiaroscuroCinematiLighting.safetensors"},
+  {"name":"FameGrid_Revolution_ZIB","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/FameGrid_Revolution_ZIB.safetensors"},
+  {"name":"NSFW","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/NSFW.safetensors"},
+  {"name":"PHOTOSTYLE","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/PHOTOSTYLE.safetensors"},
+  {"name":"PortraitPhotographyNationalStyle","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/PortraitPhotographyNationalStyle.safetensors"},
+  {"name":"ZAnime","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/ZAnime.safetensors"},
+  {"name":"vrtlAdrianaLima","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/vrtlAdrianaLima.safetensors"}
+]

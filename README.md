@@ -7,7 +7,7 @@
 ## Key Features
 
 - **Multi-Model Generation** — Switch between **FLUX.1-dev** (RunningHub), **Z-Image** (RunPod Serverless), and **FLUX.2-klein** (RunPod Serverless) from the Generate tab. The same AI prompt engineering pipeline feeds all three models.
-- **Multi-LoRA Blending** — Both **Z-Image** and **FLUX.2-klein** support a dynamic LoRA Stack. Load multiple adapters in parallel with per-LoRA strength control and additive blending.
+- **Multi-LoRA Blending** — Both **Z-Image** and **FLUX.2-klein** support a dynamic LoRA Stack. Load multiple adapters in parallel with per-LoRA strength control and additive blending. A curated preset dropdown is populated from a build-time config file — pick a style or enter any custom URL.
 - **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed prompts via a 2-step process: location selection + AI composition. Each model has a specialized Prompt Director tuned for its strengths.
 - **FLUX.2-klein Support** — 9B-parameter undistilled flow-match transformer by Black Forest Labs, with quality presets, multi-LoRA support, optional detail refinement (2nd pass), and server-side upscaling.
 - **Image Upscaling** — Batch upscale images to 2K resolution using specialized RunningHub workflows. Handles intermediary storage via S3 (e.g., Backblaze B2) with automatic presigned URL generation.
@@ -143,7 +143,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | Inference Steps            | `50`          | Number of diffusion steps (10–50). 50 recommended for high realism.               |
 | Guidance Scale             | `3.5`         | CFG scale. 3.5-4.5 recommended for realism.                                       |
 | Scheduler Shift            | `1.5`         | FlowMatch scheduler shift.                                                        |
-| LoRA Stack                 | 1 empty row   | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale. |
+| LoRA Stack                 | 1 empty row   | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale. Select from the curated preset dropdown (populated from `loras-zimage.json`) or enter any URL directly. |
 | Seed                       | `-1` (random) | Fixed seed for reproducibility.                                                   |
 | Enable High-Res Refinement | off           | Runs a second pass for extra detail and upscaling.                                |
 | ↳ Upscale Factor           | `1.5`         | Scale multiplier for the refinement pass.                                         |
@@ -156,7 +156,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | -------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Quality Preset             | `realistic_character` | Preset bundle: steps, guidance, shift, and resolution tuned for the use-case. Options: `realistic_character`, `portrait_hd`, `cinematic_full`, `fast_preview`, `maximum_quality`, `character_portrait_best`, `character_portrait_vertical`, `character_cinematic` |
 | Aspect Ratio               | `1:1`                 | 12 presets (landscape, square, portrait) — all ~1K resolution, 32px-aligned. Landscape: `21:9` (1024×448), `2:1` (1024×512), `16:9` (1024×576), `3:2` (1024×672), `4:3` (1024×768), `5:4` (1024×832). Square: `1:1` (1024×1024). Portrait: `4:5` (832×1024), `3:4` (768×1024), `2:3` (672×1024), `9:16` (576×1024), `1:2` (512×1024). |
-| LoRA Stack                 | 1 empty row           | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale.                                                                                                                                                                                 |
+| LoRA Stack                 | 1 empty row           | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale. Select from the curated preset dropdown (populated from `loras-klein.json`) or enter any URL directly.                                                                          |
 | Seed                       | `-1` (random)         | Fixed seed for reproducibility.                                                                                                                                                                                                                                   |
 | Prompt Length Limit        | `512`                 | Text encoder token cap (`max_sequence_length`).                                                                                                                                                                                                                   |
 | LoRA Mix Method            | `absolute`            | Multi-LoRA scale interpretation: `absolute` (exact strengths) or `normalized` (auto-balance).                                                                                                                                                                     |
@@ -201,24 +201,40 @@ Serves generated/upscaled images from the mounted output volume.
 rhub/
 ├── src/
 │   ├── lib/
+│   │   ├── loras-klein.json          # FLUX.2-klein LoRA preset list (generated by generate-loras.sh)
+│   │   ├── loras-zimage.json         # Z-Image LoRA preset list (generated by generate-loras.sh)
 │   │   ├── tt-decoder.ts             # LSB Steganography extraction
 │   │   ├── tt-encoder.ts             # LSB Steganography embedding
 │   │   ├── s3.ts                     # S3 Client & Presigned URL logic
 │   │   └── locations.ts              # 300 photogenic locations
 │   └── routes/
 │       ├── +page.svelte              # Main UI (Runes) — Generate & Upscale tabs
-│       ├── +page.server.ts           # Server load — passes env-backed API keys to UI
+│       ├── +page.server.ts           # Server load — passes env-backed API keys + LoRA lists to UI
 │       └── api/
 │           ├── generate/             # AI Synthesis + Multi-model Submission
 │           ├── zimage-check/         # RunPod job polling + image download (Z-Image & FLUX.2-klein)
 │           ├── upscale/              # Upload + Encoding + S3 Hosting
 │           ├── check/                # RunningHub task polling + TT-Decode
 │           └── images/               # Static file serving from /mount
+├── generate-loras.sh                 # Host script — regenerates LoRA JSON configs from local dirs
 ├── .env.example                      # Template for secrets and limits
 ├── .env                              # Local secrets (gitignored)
 ├── Dockerfile                        # Production build
 └── docker-compose.yml                # Container orchestration
 ```
+
+### Updating the LoRA Presets
+
+Run the host-side script before rebuilding the container whenever LoRA files are added or removed:
+
+```bash
+bash generate-loras.sh
+docker compose up -d --build
+```
+
+The script scans:
+- `/mnt/backblaze/storage/LoRA/Civitai/flux.2-klein-9b/` → `src/lib/loras-klein.json`
+- `/mnt/backblaze/storage/LoRA/Civitai/zImage/` → `src/lib/loras-zimage.json`
 
 ## Tech Stack
 
