@@ -41,14 +41,13 @@
     // FLUX.2-klein 2nd pass / upscale params
     let kleinEnable2ndPass = $state(false);
     let kleinSecondPassStrength = $state(0.2);
-    let kleinSecondPassSteps = $state(12);
-    let kleinSecondPassGuidanceScale = $state(1.0);
+    let kleinSecondPassSteps = $state(4);
     let kleinSecondPassLoraScaleMultiplier = $state(1.0);
     let kleinEnableUpscale = $state(false);
     let kleinUpscaleFactor = $state(2.0);
     let kleinUpscaleBlend = $state(0.35);
     let kleinMaxSequenceLength = $state(512);
-    let kleinLoraScaleMode = $state<'absolute' | 'normalized'>('absolute');
+    let kleinShift = $state(1.5);
 
     // FLUX.2-klein multi-LoRA stack
     interface KleinLora { url: string; keyword: string; scale: number; preset: string; }
@@ -158,17 +157,19 @@
         // Character LoRA optimized presets
         { id: 'character_portrait_best', label: 'Character Portrait (Best)' },
         { id: 'character_portrait_vertical', label: 'Character Portrait (Vertical)' },
-        { id: 'character_cinematic', label: 'Character Cinematic' }
+        { id: 'character_cinematic', label: 'Character Cinematic' },
+        { id: 'manga_style', label: 'Manga / Illustration Style' }
     ];
-    const kleinPresetDefaults: Record<string, { steps: number; guidance: number; shift: number; width: number; height: number }> = {
-        realistic_character: { steps: 35, guidance: 2.0, shift: 1.5, width: 1024, height: 1024 },
-        portrait_hd: { steps: 40, guidance: 2.0, shift: 1.5, width: 1024, height: 1536 },
-        cinematic_full: { steps: 35, guidance: 2.5, shift: 1.5, width: 1536, height: 1024 },
-        fast_preview: { steps: 20, guidance: 2.0, shift: 1.5, width: 1024, height: 1024 },
-        maximum_quality: { steps: 50, guidance: 2.5, shift: 1.0, width: 1024, height: 1024 },
-        character_portrait_best: { steps: 45, guidance: 2.2, shift: 2.5, width: 1024, height: 1024 },
-        character_portrait_vertical: { steps: 45, guidance: 2.0, shift: 2.0, width: 896, height: 1152 },
-        character_cinematic: { steps: 40, guidance: 2.5, shift: 2.5, width: 1344, height: 896 }
+    const kleinPresetDefaults: Record<string, { steps: number; shift: number; width: number; height: number }> = {
+        realistic_character: { steps: 8,  shift: 1.5, width: 1024, height: 1024 },
+        portrait_hd:         { steps: 8,  shift: 1.5, width: 1024, height: 1536 },
+        cinematic_full:      { steps: 8,  shift: 1.5, width: 1536, height: 1024 },
+        fast_preview:        { steps: 4,  shift: 1.5, width: 1024, height: 1024 },
+        maximum_quality:     { steps: 16, shift: 1.0, width: 1024, height: 1024 },
+        character_portrait_best:     { steps: 12, shift: 2.5, width: 1024, height: 1024 },
+        character_portrait_vertical: { steps: 12, shift: 2.0, width: 896,  height: 1152 },
+        character_cinematic:         { steps: 8,  shift: 2.5, width: 1344, height: 896  },
+        manga_style:                 { steps: 8,  shift: 1.5, width: 1024, height: 1024 }
     };
     function getKleinPresetDefaults(presetId: string) {
         return kleinPresetDefaults[presetId] || kleinPresetDefaults.realistic_character;
@@ -267,13 +268,12 @@
             klein_enable_2nd_pass: kleinEnable2ndPass,
             klein_second_pass_strength: kleinSecondPassStrength,
             klein_second_pass_steps: kleinSecondPassSteps,
-            klein_second_pass_guidance_scale: kleinSecondPassGuidanceScale,
             klein_second_pass_lora_scale_multiplier: kleinSecondPassLoraScaleMultiplier,
             klein_enable_upscale: kleinEnableUpscale,
             klein_upscale_factor: kleinUpscaleFactor,
             klein_upscale_blend: kleinUpscaleBlend,
             klein_max_sequence_length: kleinMaxSequenceLength,
-            klein_lora_scale_mode: kleinLoraScaleMode,
+            klein_shift: kleinShift,
             kleinAspectRatio,
             klein_width: (kleinAspectRatios.find(ar => ar.ratio === kleinAspectRatio) ?? { width: 1024, height: 1024 }).width,
             klein_height: (kleinAspectRatios.find(ar => ar.ratio === kleinAspectRatio) ?? { width: 1024, height: 1024 }).height,
@@ -475,8 +475,16 @@
 
     async function pollRunpodTask(resultId: string, jobId: string, payload: any) {
         const { runpodKey: taskRunpodKey, outputDir: taskOutputDir, prefix: taskPrefix, model: taskModel } = payload;
+        const startTime = Date.now();
+        let loadingModelNotified = false;
 
         while (!isCancelled) {
+            // After 30s without a result, notify user that the model/LoRAs are loading
+            if (!loadingModelNotified && (Date.now() - startTime) > 30000) {
+                updateResult(resultId, { status: 'LOADING_MODEL' });
+                loadingModelNotified = true;
+            }
+
             try {
                 const response = await fetch('/api/zimage-check', {
                     method: 'POST',
@@ -860,7 +868,7 @@
                             </select>
                         </div>
                         <div class="preset-meta">
-                            Preset defaults: {getKleinPresetDefaults(preset).steps} steps, guidance {getKleinPresetDefaults(preset).guidance}, shift {getKleinPresetDefaults(preset).shift}, {getKleinPresetDefaults(preset).width}×{getKleinPresetDefaults(preset).height}
+                            Preset defaults: {getKleinPresetDefaults(preset).steps} steps, shift {getKleinPresetDefaults(preset).shift}, {getKleinPresetDefaults(preset).width}×{getKleinPresetDefaults(preset).height} — distilled model, guidance clamped to 1.0
                         </div>
                     {/if}
                     <div class="grid">
@@ -906,17 +914,14 @@
                         </div>
                         {#if model === 'flux-klein'}
                             <div class="field">
+                                <label for="kleinShift">Shift</label>
+                                <input type="number" id="kleinShift" bind:value={kleinShift} min="0.5" max="5" step="0.5" />
+                                <p class="field-hint">1.5 for general photorealism. 2.5 for character LoRAs (better identity preservation). Overrides the preset default.</p>
+                            </div>
+                            <div class="field">
                                 <label for="kleinMaxSequenceLength">Prompt Length Limit (tokens)</label>
                                 <input type="number" id="kleinMaxSequenceLength" bind:value={kleinMaxSequenceLength} min="1" max="512" step="1" />
                                 <p class="field-hint">Maximum prompt tokens read by the model. Extra tokens are truncated.</p>
-                            </div>
-                            <div class="field">
-                                <label for="kleinLoraScaleMode">LoRA Mix Method</label>
-                                <select id="kleinLoraScaleMode" bind:value={kleinLoraScaleMode}>
-                                    <option value="absolute">Use Exact Strengths</option>
-                                    <option value="normalized">Auto-Balance by Ratio</option>
-                                </select>
-                                <p class="field-hint">Exact uses your raw values; Auto-Balance keeps the same ratio but normalizes total strength.</p>
                             </div>
                         {/if}
                     </div>
@@ -940,16 +945,13 @@
                                 </div>
                                 <div class="field">
                                     <label for="kleinSecondPassSteps">Refinement Steps</label>
-                                    <input type="number" id="kleinSecondPassSteps" bind:value={kleinSecondPassSteps} min="5" max="50" />
-                                </div>
-                                <div class="field">
-                                    <label for="kleinSecondPassGuidanceScale">Refinement Guidance</label>
-                                    <input type="number" id="kleinSecondPassGuidanceScale" bind:value={kleinSecondPassGuidanceScale} min="0.1" max="5" step="0.1" />
+                                    <input type="number" id="kleinSecondPassSteps" bind:value={kleinSecondPassSteps} min="1" max="4" />
+                                    <p class="field-hint">Server clamps to 1–4. Guidance is forced to 1.0 (distilled model).</p>
                                 </div>
                                 <div class="field">
                                     <label for="kleinSecondPassLoraScaleMultiplier">Refinement LoRA Strength</label>
-                                    <input type="number" id="kleinSecondPassLoraScaleMultiplier" bind:value={kleinSecondPassLoraScaleMultiplier} min="0" max="2" step="0.05" />
-                                    <p class="field-hint">Scales LoRA effect only during the detail refinement pass.</p>
+                                    <input type="number" id="kleinSecondPassLoraScaleMultiplier" bind:value={kleinSecondPassLoraScaleMultiplier} min="0" max="1" step="0.05" />
+                                    <p class="field-hint">Scales LoRA effect during the detail pass only. Server clamps to 0.0–1.0.</p>
                                 </div>
                             </div>
                         {/if}
@@ -1151,6 +1153,8 @@
                                     {/if}
                                 {:else if res.status === 'FAILED' || res.status === 'CANCELLED'}
                                     <div class="error-placeholder">{res.status}</div>
+                                {:else if res.status === 'LOADING_MODEL'}
+                                    <div class="loading-placeholder">Loading Model / LoRAs...<br><small>First request with a new LoRA set takes 15–20s extra</small></div>
                                 {:else}
                                     <div class="loading-placeholder">Processing...</div>
                                 {/if}
@@ -1549,6 +1553,7 @@
     .status-badge { font-size: 0.65rem; padding: 4px 8px; border-radius: 99px; font-weight: 700; text-transform: uppercase; margin-right: 8px; }
     .initializing { background: #fef3c7; color: #92400e; }
     .processing { background: #dbeafe; color: #1e40af; }
+    .loading_model { background: #ede9fe; color: #5b21b6; }
     .success { background: #dcfce7; color: #166534; }
     .failed, .cancelled { background: #fee2e2; color: #991b1b; }
 

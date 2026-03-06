@@ -40,13 +40,12 @@ export const POST: RequestHandler = async ({ request }) => {
     klein_enable_2nd_pass = false,
     klein_second_pass_strength = 0.2,
     klein_second_pass_steps = 12,
-    klein_second_pass_guidance_scale = 1.0,
     klein_second_pass_lora_scale_multiplier = 1.0,
     klein_enable_upscale = false,
     klein_upscale_factor = 2.0,
     klein_upscale_blend = 0.35,
     klein_max_sequence_length = 512,
-    klein_lora_scale_mode = "absolute",
+    klein_shift = 0,
     klein_width = 1024,
     klein_height = 1024,
     // RunningHub ZImage Upscale + Face Detailer params
@@ -454,14 +453,14 @@ RULES:
             seed: effectiveSeed,
             output_format: "jpeg",
             return_type: "s3",
-            max_sequence_length: klein_max_sequence_length,
-            lora_scale_mode: klein_lora_scale_mode,
+            max_sequence_length: Number(klein_max_sequence_length) || 512,
+            lora_scale_mode: "absolute",
+            ...(klein_shift > 0 ? { shift: klein_shift } : {}),
             ...(klein_enable_2nd_pass
               ? {
                   enable_2nd_pass: true,
                   second_pass_strength: klein_second_pass_strength,
                   second_pass_steps: klein_second_pass_steps,
-                  second_pass_guidance_scale: klein_second_pass_guidance_scale,
                   second_pass_lora_scale_multiplier: klein_second_pass_lora_scale_multiplier,
                 }
               : {}),
