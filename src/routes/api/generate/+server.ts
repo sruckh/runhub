@@ -52,6 +52,15 @@ export const POST: RequestHandler = async ({ request }) => {
     rhub_zimage_style = "None",
     rhub_zimage_width = 896,
     rhub_zimage_height = 1120,
+    // RunningHub FLUX.2-klein params
+    rhub_klein_lora1_url = "",
+    rhub_klein_lora1_keyword = "",
+    rhub_klein_lora1_strength = 0,
+    rhub_klein_lora2_url = "",
+    rhub_klein_lora2_keyword = "",
+    rhub_klein_lora2_strength = 0,
+    rhub_klein_aspect_ratio = "1:1",
+    rhub_klein_orientation = "portrait",
   } = await request.json();
 
   // Resolve keys: user input overrides env vars
@@ -68,7 +77,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
   }
 
-  if ((model === "flux-dev" || model === "rhub-zimage") && !rhubKey) {
+  if ((model === "flux-dev" || model === "rhub-zimage" || model === "rhub-klein") && !rhubKey) {
     return json({ error: "RunningHub API Key is required" }, { status: 400 });
   }
   if ((model === "z-image" || model === "flux-klein") && !runpodKey) {
@@ -544,6 +553,102 @@ RULES:
         throw new Error(`RunningHub ZImage submission failed: ${JSON.stringify(zimageSubmitData)}`);
 
       return json({ taskId: zimageSubmitData.taskId, model: "rhub-zimage", prompt: finalPrompt });
+    }
+
+    // ── FLUX.2-klein via RunningHub ─────────────────────────────────────────
+    if (model === "rhub-klein") {
+      // Aspect ratio lookup (closest to 1K, divisible by 32)
+      const rhubKleinAspectRatios: Record<string, { width: number; height: number }> = {
+        "1:1": { width: 1024, height: 1024 },
+        "2:3": { width: 672, height: 1024 },
+        "3:4": { width: 768, height: 1024 },
+        "4:5": { width: 832, height: 1024 },
+        "9:16": { width: 576, height: 1024 },
+        "21:9": { width: 448, height: 1024 },
+      };
+
+      const baseDims = rhubKleinAspectRatios[rhub_klein_aspect_ratio] || { width: 1024, height: 1024 };
+      const rhub_klein_width = rhub_klein_orientation === "landscape" ? baseDims.height : baseDims.width;
+      const rhub_klein_height = rhub_klein_orientation === "landscape" ? baseDims.width : baseDims.height;
+
+      // Build trigger words prefix from LoRA keywords
+      const triggerWords = [rhub_klein_lora1_keyword, rhub_klein_lora2_keyword]
+        .filter((k) => k?.trim())
+        .join(", ");
+      const promptWithTriggers = triggerWords
+        ? `${triggerWords} — ${finalPrompt}`
+        : finalPrompt;
+
+      console.log(
+        `[RHUB-Klein] Submitting ${rhub_klein_aspect_ratio} ${rhub_klein_orientation} = ${rhub_klein_width}x${rhub_klein_height}`,
+      );
+      console.log(`[RHUB-Klein] LoRA1: ${rhub_klein_lora1_url || "none"} (${rhub_klein_lora1_strength}) keyword="${rhub_klein_lora1_keyword}"`);
+      console.log(`[RHUB-Klein] LoRA2: ${rhub_klein_lora2_url || "none"} (${rhub_klein_lora2_strength}) keyword="${rhub_klein_lora2_keyword}"`);
+      console.log(`[RHUB-Klein] Prompt (first 80): ${promptWithTriggers.substring(0, 80)}`);
+
+      const rhubKleinPayload = {
+        nodeInfoList: [
+          {
+            nodeId: "425",
+            fieldName: "value",
+            fieldValue: rhub_klein_lora1_url || "",
+            description: "URL of LoRA 1 safetensor",
+          },
+          {
+            nodeId: "427",
+            fieldName: "value",
+            fieldValue: rhub_klein_lora1_strength.toString(),
+            description: "Strength of LoRA 1",
+          },
+          {
+            nodeId: "426",
+            fieldName: "value",
+            fieldValue: rhub_klein_lora2_url || "",
+            description: "URL of LoRA 2 safetensor",
+          },
+          {
+            nodeId: "428",
+            fieldName: "value",
+            fieldValue: rhub_klein_lora2_strength.toString(),
+            description: "Strength of LoRA 2",
+          },
+          {
+            nodeId: "396",
+            fieldName: "text",
+            fieldValue: promptWithTriggers,
+            description: "Prompt",
+          },
+          {
+            nodeId: "205",
+            fieldName: "height",
+            fieldValue: rhub_klein_height.toString(),
+            description: "Height before Upscale",
+          },
+          {
+            nodeId: "205",
+            fieldName: "width",
+            fieldValue: rhub_klein_width.toString(),
+            description: "Width before Upscale",
+          },
+        ],
+        instanceType: "default",
+        usePersonalQueue: "false",
+      };
+
+      const rhubKleinResponse = await fetch(
+        "https://www.runninghub.ai/openapi/v2/run/ai-app/2029780093899378690",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${rhubKey}` },
+          body: JSON.stringify(rhubKleinPayload),
+        },
+      );
+
+      const kleinSubmitData = await rhubKleinResponse.json();
+      if (!kleinSubmitData.taskId)
+        throw new Error(`RunningHub Klein submission failed: ${JSON.stringify(kleinSubmitData)}`);
+
+      return json({ taskId: kleinSubmitData.taskId, model: "rhub-klein", prompt: promptWithTriggers });
     }
 
     // ── FLUX.1-dev via RunningHub ──────────────────────────────────────────

@@ -83,6 +83,23 @@
     let rhubZimageWidth = $state(816);
     let rhubZimageHeight = $state(1024);
 
+    // RunningHub FLUX.2-klein params
+    let rhubKleinLora2Url = $state('');
+    let rhubKleinLora2Keyword = $state('');
+    let rhubKleinLora2Strength = $state(0.85);
+    let rhubKleinAspectRatio = $state('1:1');
+    let rhubKleinOrientation = $state('portrait');
+
+    // RHUB-Klein aspect ratios (closest to 1K, divisible by 32)
+    const rhubKleinAspectRatios = [
+        { ratio: '1:1', width: 1024, height: 1024 },
+        { ratio: '2:3', width: 672, height: 1024 },
+        { ratio: '3:4', width: 768, height: 1024 },
+        { ratio: '4:5', width: 832, height: 1024 },
+        { ratio: '9:16', width: 576, height: 1024 },
+        { ratio: '21:9', width: 448, height: 1024 },
+    ];
+
     // Load persisted settings
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
     let useTtDecoder = $state(savedTtDecoder);
@@ -280,6 +297,14 @@
             rhub_zimage_style: rhubZimageStyle,
             rhub_zimage_width: rhubZimageWidth,
             rhub_zimage_height: rhubZimageHeight,
+            rhub_klein_lora1_url: loraUrl,
+            rhub_klein_lora1_keyword: loraKeyword,
+            rhub_klein_lora1_strength: loraScale,
+            rhub_klein_lora2_url: rhubKleinLora2Url,
+            rhub_klein_lora2_keyword: rhubKleinLora2Keyword,
+            rhub_klein_lora2_strength: rhubKleinLora2Strength,
+            rhub_klein_aspect_ratio: rhubKleinAspectRatio,
+            rhub_klein_orientation: rhubKleinOrientation,
             createdAt: new Date().toISOString()
         };
 
@@ -443,14 +468,16 @@
     }
 
     async function pollTask(resultId: string, taskId: string, payload: any) {
-        const { rhubKey, outputDir, prefix, useTtDecoder } = payload;
-        
+        const { rhubKey, outputDir, prefix, useTtDecoder, model } = payload;
+        // rhub-klein workflow always returns tt-encoded images
+        const effectiveTtDecoder = model === 'rhub-klein' ? true : useTtDecoder;
+
         while (!isCancelled) {
             try {
                 const response = await fetch('/api/check', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ taskId, rhubKey, outputDir, prefix, useTtDecoder })
+                    body: JSON.stringify({ taskId, rhubKey, outputDir, prefix, useTtDecoder: effectiveTtDecoder })
                 });
                 const data = await response.json();
 
@@ -688,7 +715,7 @@
                 <div class="settings-header">
                     <h2>Generation Settings</h2>
                     <span class="settings-badge">
-                        {#if model === 'flux-dev'}FLUX.1-dev{:else if model === 'flux-klein'}FLUX.2-klein{:else if model === 'rhub-zimage'}ZImage Upscale{:else}Z-Image{/if}
+                        {#if model === 'flux-dev'}FLUX.1-dev{:else if model === 'flux-klein'}FLUX.2-klein{:else if model === 'rhub-zimage'}ZImage Upscale{:else if model === 'rhub-klein'}FLUX.2-klein (RH){:else}Z-Image{/if}
                     </span>
                 </div>
 
@@ -700,6 +727,7 @@
                         <option value="flux-klein">FLUX.2-klein — RunPod Serverless</option>
                         <option value="z-image">Z-Image — RunPod Serverless</option>
                         <option value="rhub-zimage">ZImage Upscale — RunningHub</option>
+                        <option value="rhub-klein">FLUX.2-klein — RunningHub</option>
                     </select>
                 </div>
 
@@ -854,6 +882,47 @@
                     <div class="field">
                         <label for="zimageSeed">Seed (−1 = random)</label>
                         <input type="number" id="zimageSeed" bind:value={zimageSeed} min="-1" />
+                    </div>
+                {/if}
+
+                {#if model === 'rhub-klein'}
+                    <div class="lora-section">
+                        <h4>LoRA 2 (Optional)</h4>
+                        <div class="field">
+                            <label for="rhubKleinLora2Url">Safetensor URL</label>
+                            <input type="text" id="rhubKleinLora2Url" bind:value={rhubKleinLora2Url} placeholder="https://...safetensors (optional)" />
+                        </div>
+                        <div class="grid">
+                            <div class="field">
+                                <label for="rhubKleinLora2Keyword">Trigger Word</label>
+                                <input type="text" id="rhubKleinLora2Keyword" bind:value={rhubKleinLora2Keyword} placeholder="e.g. style name" />
+                            </div>
+                            <div class="field">
+                                <label for="rhubKleinLora2Strength">Strength</label>
+                                <input type="number" id="rhubKleinLora2Strength" bind:value={rhubKleinLora2Strength} min="0" max="2" step="0.05" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid">
+                        <div class="field">
+                            <label for="rhubKleinAspectRatio">Aspect Ratio</label>
+                            <select id="rhubKleinAspectRatio" bind:value={rhubKleinAspectRatio}>
+                                {#each rhubKleinAspectRatios as ar}
+                                    <option value={ar.ratio}>{ar.ratio}</option>
+                                {/each}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Orientation</label>
+                            <div class="orient-row">
+                                <button type="button" class="orient-btn {rhubKleinOrientation === 'portrait' ? 'active' : ''}" onclick={() => rhubKleinOrientation = 'portrait'}>Portrait</button>
+                                <button type="button" class="orient-btn {rhubKleinOrientation === 'landscape' ? 'active' : ''}" onclick={() => rhubKleinOrientation = 'landscape'}>Landscape</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="zimageSeedRhubKlein">Seed (−1 = random)</label>
+                        <input type="number" id="zimageSeedRhubKlein" bind:value={zimageSeed} min="-1" />
                     </div>
                 {/if}
 
@@ -1067,7 +1136,7 @@
 
         <div class="actions">
             <button class="btn-primary main-action" onclick={handleSubmit}>
-                {activeTab === 'generate' ? (model === 'flux-dev' ? 'Add Generation to Queue' : model === 'rhub-zimage' ? 'Add ZImage Upscale to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`) : 'Add Upscale to Queue'}
+                {activeTab === 'generate' ? (model === 'flux-dev' ? 'Add Generation to Queue' : model === 'rhub-zimage' ? 'Add ZImage Upscale to Queue' : model === 'rhub-klein' ? 'Add FLUX.2-klein to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`) : 'Add Upscale to Queue'}
             </button>
             <div class="action-grid">
                 {#if loading}
@@ -1097,7 +1166,7 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else}{task.aspectRatio}{/if}
+                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}{task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'upscale'}
