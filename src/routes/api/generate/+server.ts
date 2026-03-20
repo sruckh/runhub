@@ -39,7 +39,7 @@ export const POST: RequestHandler = async ({ request }) => {
     // FLUX.2-klein 2nd pass / upscale params
     klein_enable_2nd_pass = false,
     klein_second_pass_strength = 0.2,
-    klein_second_pass_steps = 12,
+    klein_second_pass_steps = 4,
     klein_second_pass_lora_scale_multiplier = 1.0,
     klein_enable_upscale = false,
     klein_upscale_factor = 2.0,

@@ -76,6 +76,16 @@
         _prevLoraModel = m;
     });
 
+    // Sync kleinShift with preset default when preset changes
+    let _prevPreset = preset;
+    $effect(() => {
+        const p = preset;
+        if (p !== _prevPreset) {
+            kleinShift = getKleinPresetDefaults(p).shift;
+            _prevPreset = p;
+        }
+    });
+
     // RunningHub ZImage Upscale + Face Detailer params
     let rhubZimageStyle = $state('None');
     let rhubZimagePresetId = $state('ig_portrait');
@@ -937,7 +947,7 @@
                             </select>
                         </div>
                         <div class="preset-meta">
-                            Preset defaults: {getKleinPresetDefaults(preset).steps} steps, shift {getKleinPresetDefaults(preset).shift}, {getKleinPresetDefaults(preset).width}×{getKleinPresetDefaults(preset).height} — distilled model, guidance clamped to 1.0
+                            Preset defaults: {getKleinPresetDefaults(preset).steps} steps, shift {getKleinPresetDefaults(preset).shift} — distilled model, guidance clamped to 1.0. Image dimensions set by Aspect Ratio below.
                         </div>
                     {/if}
                     <div class="grid">
