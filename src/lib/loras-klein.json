@@ -16,11 +16,11 @@
   {"name":"anything2real","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/anything2real.safetensors"},
   {"name":"anything2real_v1_f2k","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/anything2real_v1_f2k.safetensors"},
   {"name":"detail_slider","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/detail_slider.safetensors"},
-  {"name":"f2k_selfies_13400s","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/f2k_selfies_13400s.safetensors"},
   {"name":"manga","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/manga.safetensors"},
   {"name":"nnegrat_illus_9b_3200","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/nnegrat_illus_9b_3200.safetensors"},
   {"name":"realism_slider","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/realism_slider.safetensors"},
   {"name":"realistic","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/realistic.safetensors"},
   {"name":"ultra_real_v1","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/ultra_real_v1.safetensors"},
+  {"name":"ultra_real_v2","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/ultra_real_v2.safetensors"},
   {"name":"upscale_portrait","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/upscale_portrait.safetensors"}
 ]
