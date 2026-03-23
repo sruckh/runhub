@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount, untrack } from 'svelte';
+    import rhubHero from '../../imgs/RHUB.svg';
 
     let { data } = $props();
 
@@ -42,7 +43,6 @@
     let kleinEnable2ndPass = $state(false);
     let kleinSecondPassStrength = $state(0.2);
     let kleinSecondPassSteps = $state(4);
-    let kleinSecondPassLoraScaleMultiplier = $state(1.0);
     let kleinEnableUpscale = $state(false);
     let kleinUpscaleFactor = $state(2.0);
     let kleinUpscaleBlend = $state(0.35);
@@ -147,7 +147,7 @@
     }
 
     onMount(() => {
-        console.log('iMontage Interface Mounted');
+        console.log('AI Image Magick interface mounted');
         const savedQueue = localStorage.getItem('rhub_queue');
         if (savedQueue) {
             try {
@@ -295,7 +295,6 @@
             klein_enable_2nd_pass: kleinEnable2ndPass,
             klein_second_pass_strength: kleinSecondPassStrength,
             klein_second_pass_steps: kleinSecondPassSteps,
-            klein_second_pass_lora_scale_multiplier: kleinSecondPassLoraScaleMultiplier,
             klein_enable_upscale: kleinEnableUpscale,
             klein_upscale_factor: kleinUpscaleFactor,
             klein_upscale_blend: kleinUpscaleBlend,
@@ -664,6 +663,14 @@
     }
 </script>
 
+<svelte:head>
+    <title>AI Image Magick (Bring your own LoRA)</title>
+    <meta
+        name="description"
+        content="AI Image Magick lets you generate and upscale images across RunningHub and RunPod workflows with your own LoRA stack."
+    />
+</svelte:head>
+
 <!-- Modal for Full Screen Image -->
 {#if selectedImage}
     <div class="modal" onclick={() => selectedImage = null} role="presentation">
@@ -675,9 +682,19 @@
 {/if}
 
 <main class="container">
-    <header>
-        <h1>iMontage RunningHub</h1>
-        <p>Expert FLUX.1‑dev Prompt Engineering</p>
+    <header class="hero-banner">
+        <div class="hero-copy">
+            <span class="hero-kicker">Bring Your Own LoRA</span>
+            <h1>AI Image Magick (Bring your own LoRA)</h1>
+            <p>
+                Prompt, generate, refine, and upscale in one workspace with RunningHub and RunPod-backed image pipelines.
+            </p>
+        </div>
+        <div class="hero-mark">
+            <div class="hero-mark-frame">
+                <img src={rhubHero} alt="RHUB logo artwork" />
+            </div>
+        </div>
     </header>
 
     <div class="card">
@@ -1024,13 +1041,8 @@
                                 </div>
                                 <div class="field">
                                     <label for="kleinSecondPassSteps">Refinement Steps</label>
-                                    <input type="number" id="kleinSecondPassSteps" bind:value={kleinSecondPassSteps} min="1" max="4" />
-                                    <p class="field-hint">Server clamps to 1–4. Guidance is forced to 1.0 (distilled model).</p>
-                                </div>
-                                <div class="field">
-                                    <label for="kleinSecondPassLoraScaleMultiplier">Refinement LoRA Strength</label>
-                                    <input type="number" id="kleinSecondPassLoraScaleMultiplier" bind:value={kleinSecondPassLoraScaleMultiplier} min="0" max="1" step="0.05" />
-                                    <p class="field-hint">Scales LoRA effect during the detail pass only. Server clamps to 0.0–1.0.</p>
+                                    <input type="number" id="kleinSecondPassSteps" bind:value={kleinSecondPassSteps} min="1" max="8" />
+                                    <p class="field-hint">Server clamps to 1–8. Guidance is forced to 1.0 (distilled model).</p>
                                 </div>
                             </div>
                         {/if}
@@ -1042,7 +1054,7 @@
                                 <input type="checkbox" id="kleinEnableUpscale" bind:checked={kleinEnableUpscale} class="toggle-checkbox" />
                                 <span class="toggle-slider-ui"></span>
                             </label>
-                            <p class="toggle-description">Upscale the generated image server-side before delivery</p>
+                            <p class="toggle-description">SR upscale runs before Detail Refinement — second pass refines the upscaled image</p>
                         </div>
 
                         {#if kleinEnableUpscale}
@@ -1291,18 +1303,21 @@
     :global(*) {
         box-sizing: border-box;
     }
-    :global(body) { 
-        font-family: 'Inter', system-ui, sans-serif; 
-        background-color: #f8fafc; 
-        color: #1e293b; 
-        margin: 0; 
+    :global(body) {
+        font-family: 'Inter', system-ui, sans-serif;
+        background:
+            radial-gradient(circle at top left, rgba(96, 165, 250, 0.18), transparent 28%),
+            radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 24%),
+            linear-gradient(180deg, #ecf3ff 0%, #f8fafc 32%, #f8fafc 100%);
+        color: #1e293b;
+        margin: 0;
         -webkit-tap-highlight-color: transparent;
         overflow-x: hidden;
     }
-    .container { 
-        max-width: 1000px; 
-        margin: 0 auto; 
-        padding: 20px 16px; 
+    .container {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 20px 16px;
         width: 100%;
         overflow-x: hidden;
     }
@@ -1311,22 +1326,108 @@
         .container { margin: 40px auto; padding: 0 20px; }
     }
 
-    header { text-align: center; margin-bottom: 24px; }
-    header h1 { font-size: 1.5rem; margin: 0; }
-    header p { font-size: 0.9rem; color: #64748b; margin-top: 4px; }
-
-    @media (min-width: 768px) {
-        header { margin-bottom: 40px; }
-        header h1 { font-size: 2rem; }
+    .hero-banner {
+        position: relative;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 24px;
+        align-items: center;
+        margin-bottom: 24px;
+        padding: 28px 24px;
+        border-radius: 28px;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at 15% 20%, rgba(96, 165, 250, 0.24), transparent 22%),
+            radial-gradient(circle at 80% 25%, rgba(45, 212, 191, 0.18), transparent 20%),
+            linear-gradient(135deg, rgba(11, 18, 32, 0.86) 0%, #162338 50%, #0f172a 100%);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        box-shadow:
+            0 30px 60px rgba(15, 23, 42, 0.22),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+    .hero-banner::after {
+        content: '';
+        position: absolute;
+        inset: auto -10% -32% auto;
+        width: 280px;
+        height: 280px;
+        background: radial-gradient(circle, rgba(96, 165, 250, 0.35) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .hero-copy {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+    .hero-kicker {
+        width: fit-content;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.14);
+        border: 1px solid rgba(191, 219, 254, 0.28);
+        color: #bfdbfe;
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+    .hero-banner h1 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: clamp(2rem, 5vw, 3.6rem);
+        line-height: 1.02;
+        max-width: 12ch;
+    }
+    .hero-banner p {
+        margin: 0;
+        max-width: 52ch;
+        color: #e2e8f0;
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+    .hero-mark {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        justify-content: center;
+    }
+    .hero-mark-frame {
+        width: min(100%, 440px);
+        padding: 18px;
+        border-radius: 24px;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04)),
+            rgba(15, 23, 42, 0.38);
+        border: 1px solid rgba(191, 219, 254, 0.2);
+        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
+        backdrop-filter: blur(8px);
+    }
+    .hero-mark-frame img {
+        display: block;
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 20px 32px rgba(15, 23, 42, 0.45));
     }
 
-    .card, .results { 
-        background: white; 
-        padding: 20px; 
-        border-radius: 12px; 
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
-        margin-bottom: 24px; 
-        border: 1px solid #e2e8f0; 
+    @media (min-width: 900px) {
+        .hero-banner {
+            grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.9fr);
+            gap: 32px;
+            margin-bottom: 40px;
+            padding: 40px;
+        }
+    }
+
+    .card, .results {
+        background: white;
+        padding: 20px;
+        border-radius: 18px;
+        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+        margin-bottom: 24px;
+        border: 1px solid rgba(203, 213, 225, 0.9);
         width: 100%;
     }
 

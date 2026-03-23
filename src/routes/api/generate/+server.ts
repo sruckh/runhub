@@ -40,7 +40,6 @@ export const POST: RequestHandler = async ({ request }) => {
     klein_enable_2nd_pass = false,
     klein_second_pass_strength = 0.2,
     klein_second_pass_steps = 4,
-    klein_second_pass_lora_scale_multiplier = 1.0,
     klein_enable_upscale = false,
     klein_upscale_factor = 2.0,
     klein_upscale_blend = 0.35,
@@ -470,7 +469,6 @@ RULES:
                   enable_2nd_pass: true,
                   second_pass_strength: klein_second_pass_strength,
                   second_pass_steps: klein_second_pass_steps,
-                  second_pass_lora_scale_multiplier: klein_second_pass_lora_scale_multiplier,
                 }
               : {}),
             ...(klein_enable_upscale
