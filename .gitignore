@@ -4,5 +4,6 @@ imgs/
 .env
 tmp/
 .svelte-kit/
+build/
 node_modules/
 package-lock.json
