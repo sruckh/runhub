@@ -569,64 +569,59 @@ RULES:
       const rhub_klein_width = rhub_klein_orientation === "landscape" ? baseDims.height : baseDims.width;
       const rhub_klein_height = rhub_klein_orientation === "landscape" ? baseDims.width : baseDims.height;
 
-      // Build trigger words prefix from LoRA keywords
-      const triggerWords = [rhub_klein_lora1_keyword, rhub_klein_lora2_keyword]
-        .filter((k) => k?.trim())
-        .join(", ");
-      const promptWithTriggers = triggerWords
-        ? `${triggerWords} — ${finalPrompt}`
-        : finalPrompt;
+      // New workflow expects loraUrl to be the filename like "K1mScum-flux.2-klein_000003000.safetensors"
+      const selectedLora = rhub_klein_lora1_url || "K1mScum-flux.2-klein_000003000.safetensors";
+      const loraStrength = (rhub_klein_lora1_strength || 1).toString();
 
       console.log(
         `[RHUB-Klein] Submitting ${rhub_klein_aspect_ratio} ${rhub_klein_orientation} = ${rhub_klein_width}x${rhub_klein_height}`,
       );
-      console.log(`[RHUB-Klein] LoRA1: ${rhub_klein_lora1_url || "none"} (${rhub_klein_lora1_strength}) keyword="${rhub_klein_lora1_keyword}"`);
-      console.log(`[RHUB-Klein] LoRA2: ${rhub_klein_lora2_url || "none"} (${rhub_klein_lora2_strength}) keyword="${rhub_klein_lora2_keyword}"`);
-      console.log(`[RHUB-Klein] Prompt (first 80): ${promptWithTriggers.substring(0, 80)}`);
+      console.log(`[RHUB-Klein] LoRA: ${selectedLora} (strength ${loraStrength})`);
+      console.log(`[RHUB-Klein] Prompt (first 80): ${finalPrompt.substring(0, 80)}`);
 
       const rhubKleinPayload = {
         nodeInfoList: [
           {
-            nodeId: "425",
+            nodeId: "98",
             fieldName: "value",
-            fieldValue: rhub_klein_lora1_url || "",
-            description: "URL of LoRA 1 safetensor",
-          },
-          {
-            nodeId: "427",
-            fieldName: "value",
-            fieldValue: rhub_klein_lora1_strength.toString(),
-            description: "Strength of LoRA 1",
-          },
-          {
-            nodeId: "426",
-            fieldName: "value",
-            fieldValue: rhub_klein_lora2_url || "",
-            description: "URL of LoRA 2 safetensor",
-          },
-          {
-            nodeId: "428",
-            fieldName: "value",
-            fieldValue: rhub_klein_lora2_strength.toString(),
-            description: "Strength of LoRA 2",
-          },
-          {
-            nodeId: "396",
-            fieldName: "text",
-            fieldValue: promptWithTriggers,
-            description: "Prompt",
-          },
-          {
-            nodeId: "205",
-            fieldName: "height",
-            fieldValue: rhub_klein_height.toString(),
-            description: "Height before Upscale",
-          },
-          {
-            nodeId: "205",
-            fieldName: "width",
             fieldValue: rhub_klein_width.toString(),
-            description: "Width before Upscale",
+            description: "Width",
+          },
+          {
+            nodeId: "99",
+            fieldName: "value",
+            fieldValue: rhub_klein_height.toString(),
+            description: "Height",
+          },
+          {
+            nodeId: "120",
+            fieldName: "lora_name",
+            fieldValue: selectedLora,
+            description: "Use Same LoRA 01",
+          },
+          {
+            nodeId: "120",
+            fieldName: "strength_clip",
+            fieldValue: loraStrength,
+            description: "LoRA 01 strength",
+          },
+          {
+            nodeId: "122",
+            fieldName: "lora_name",
+            fieldValue: selectedLora,
+            description: "Use Same LoRA 02",
+          },
+          {
+            nodeId: "122",
+            fieldName: "strength_model",
+            fieldValue: loraStrength,
+            description: "LoRA 02 strength",
+          },
+          {
+            nodeId: "6",
+            fieldName: "text",
+            fieldValue: finalPrompt,
+            description: "Prompt",
           },
         ],
         instanceType: "default",
@@ -634,7 +629,7 @@ RULES:
       };
 
       const rhubKleinResponse = await fetch(
-        "https://www.runninghub.ai/openapi/v2/run/ai-app/2029780093899378690",
+        "https://www.runninghub.ai/openapi/v2/run/ai-app/2036237857823662082",
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${rhubKey}` },
@@ -646,7 +641,7 @@ RULES:
       if (!kleinSubmitData.taskId)
         throw new Error(`RunningHub Klein submission failed: ${JSON.stringify(kleinSubmitData)}`);
 
-      return json({ taskId: kleinSubmitData.taskId, model: "rhub-klein", prompt: promptWithTriggers });
+      return json({ taskId: kleinSubmitData.taskId, model: "rhub-klein", prompt: finalPrompt });
     }
 
     // ── FLUX.1-dev via RunningHub ──────────────────────────────────────────

@@ -814,7 +814,7 @@
                             </div>
                         {/each}
                     </div>
-                {:else}
+                {:else if model !== 'rhub-klein'}
                     <div class="grid">
                         <div class="field">
                             <label for="loraUrl">LoRA URL</label>
@@ -914,19 +914,17 @@
 
                 {#if model === 'rhub-klein'}
                     <div class="lora-section">
-                        <h4>LoRA 2 (Optional)</h4>
-                        <div class="field">
-                            <label for="rhubKleinLora2Url">Safetensor URL</label>
-                            <input type="text" id="rhubKleinLora2Url" bind:value={rhubKleinLora2Url} placeholder="https://...safetensors (optional)" />
-                        </div>
+                        <h4>LoRA Selection</h4>
                         <div class="grid">
                             <div class="field">
-                                <label for="rhubKleinLora2Keyword">Trigger Word</label>
-                                <input type="text" id="rhubKleinLora2Keyword" bind:value={rhubKleinLora2Keyword} placeholder="e.g. style name" />
+                                <label for="rhubKleinLoraName">Select LoRA</label>
+                                <select id="rhubKleinLoraName" bind:value={loraUrl}>
+                                    <option value="K1mScum-flux.2-klein_000003000.safetensors">K1mScum-FK9B</option>
+                                </select>
                             </div>
                             <div class="field">
-                                <label for="rhubKleinLora2Strength">Strength</label>
-                                <input type="number" id="rhubKleinLora2Strength" bind:value={rhubKleinLora2Strength} min="0" max="2" step="0.05" />
+                                <label for="rhubKleinLoraStrength">LoRA Scale</label>
+                                <input type="number" id="rhubKleinLoraStrength" bind:value={loraScale} min="0" max="2" step="0.05" />
                             </div>
                         </div>
                     </div>
