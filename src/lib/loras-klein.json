@@ -14,6 +14,11 @@
     ]
   },
   {
+    "name": "f2k_consist_20260225",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/f2k_consist_20260225.safetensors",
+    "triggerWords": []
+  },
+  {
     "name": "FilmGrain_Redmond",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/FilmGrain_Redmond.safetensors",
     "triggerWords": [
