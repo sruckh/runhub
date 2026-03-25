@@ -6,8 +6,8 @@
 
     // untrack: read env-backed defaults once at init without reactive tracking
     const { geminiKey: _gk = '', rhubKey: _rk = '', runpodKey: _rpk = '' } = untrack(() => data.envKeys ?? {});
-    const lorasKlein: { name: string; url: string }[] = untrack(() => data.lorasKlein ?? []);
-    const lorasZimage: { name: string; url: string }[] = untrack(() => data.lorasZimage ?? []);
+    const lorasKlein: { name: string; url: string; triggerWords?: string[] }[] = untrack(() => data.lorasKlein ?? []);
+    const lorasZimage: { name: string; url: string; triggerWords?: string[] }[] = untrack(() => data.lorasZimage ?? []);
 
     let loraUrl = $state('');
     let loraKeyword = $state('');
@@ -785,7 +785,9 @@
                                             <label for="kleinLoraPreset_{i}">LoRA Style {kleinLoras.length > 1 ? i + 1 : ''}</label>
                                             <select id="kleinLoraPreset_{i}" bind:value={lora.preset} onchange={() => {
                                                 if (lora.preset) {
-                                                    lora.url = loraList.find(l => l.name === lora.preset)?.url ?? lora.url;
+                                                    const found = loraList.find(l => l.name === lora.preset);
+                                                    lora.url = found?.url ?? lora.url;
+                                                    lora.keyword = found?.triggerWords?.join(', ') ?? lora.keyword;
                                                 }
                                             }}>
                                                 <option value="">— select a style —</option>

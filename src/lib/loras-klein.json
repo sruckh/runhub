@@ -1,27 +1,176 @@
 [
-  {"name":"Crimson_Veil","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/Crimson_Veil.safetensors"},
-  {"name":"Dark_Ghibli","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/Dark_Ghibli.safetensors"},
-  {"name":"FilmGrain_Redmond","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/FilmGrain_Redmond.safetensors"},
-  {"name":"FilmStill_Redmond","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/FilmStill_Redmond.safetensors"},
-  {"name":"K9bD3tailedP0rtraits","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/K9bD3tailedP0rtraits.safetensors"},
-  {"name":"PHOTOSTYLE","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/PHOTOSTYLE.safetensors"},
-  {"name":"PORTRKLEN9_000009000","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/PORTRKLEN9_000009000.safetensors"},
-  {"name":"PhotographyStyle","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/PhotographyStyle.safetensors"},
-  {"name":"SEANKLEN9","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/SEANKLEN9.safetensors"},
-  {"name":"SnapchatSelfie_Redmond","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/SnapchatSelfie_Redmond.safetensors"},
-  {"name":"Stdgbredmaf_Redmond","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/Stdgbredmaf_Redmond.safetensors"},
-  {"name":"V1_flux_klein","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/V1_flux_klein.safetensors"},
-  {"name":"afterdark2","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/afterdark2.safetensors"},
-  {"name":"amateur_selfie","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/amateur_selfie.safetensors"},
-  {"name":"anything2real","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/anything2real.safetensors"},
-  {"name":"anything2real_v1_f2k","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/anything2real_v1_f2k.safetensors"},
-  {"name":"detail_slider","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/detail_slider.safetensors"},
-  {"name":"dramatic_dark_lighting","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/dramatic_dark_lighting.safetensors"},
-  {"name":"manga","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/manga.safetensors"},
-  {"name":"nnegrat_illus_9b_3200","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/nnegrat_illus_9b_3200.safetensors"},
-  {"name":"realism_slider","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/realism_slider.safetensors"},
-  {"name":"realistic","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/realistic.safetensors"},
-  {"name":"ultra_real_v1","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/ultra_real_v1.safetensors"},
-  {"name":"ultra_real_v2","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/ultra_real_v2.safetensors"},
-  {"name":"upscale_portrait","url":"https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/upscale_portrait.safetensors"}
+  {
+    "name": "Crimson_Veil",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/Crimson_Veil.safetensors",
+    "triggerWords": [
+      "sworks style"
+    ]
+  },
+  {
+    "name": "Dark_Ghibli",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/Dark_Ghibli.safetensors",
+    "triggerWords": [
+      "Studio Ghibli Dark Fairytale"
+    ]
+  },
+  {
+    "name": "FilmGrain_Redmond",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/FilmGrain_Redmond.safetensors",
+    "triggerWords": [
+      "filmgrain"
+    ]
+  },
+  {
+    "name": "FilmStill_Redmond",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/FilmStill_Redmond.safetensors",
+    "triggerWords": [
+      "cinematic style"
+    ]
+  },
+  {
+    "name": "Flux2-Klein-Image-RestoreV1",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/Flux2-Klein-Image-RestoreV1.safetensors",
+    "triggerWords": [
+      "restore the image quality, remove any compression artefacts, remove any haze and soft edges, enrich the original with new intricate detail in all textures and surfaces createing a professional photorealistic photograph with natral lighting and skin texture,"
+    ]
+  },
+  {
+    "name": "K9bD3tailedP0rtraits",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/K9bD3tailedP0rtraits.safetensors",
+    "triggerWords": [
+      "D3tailedP0rtraits"
+    ]
+  },
+  {
+    "name": "PHOTOSTYLE",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/PHOTOSTYLE.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "PORTRKLEN9_000009000",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/PORTRKLEN9_000009000.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "PhotographyStyle",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/PhotographyStyle.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "SEANKLEN9",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/SEANKLEN9.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "SnapchatSelfie_Redmond",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/SnapchatSelfie_Redmond.safetensors",
+    "triggerWords": [
+      "Snapchat Selfie",
+      "Snapchat pic"
+    ]
+  },
+  {
+    "name": "Stdgbredmaf_Redmond",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/Stdgbredmaf_Redmond.safetensors",
+    "triggerWords": [
+      "Studio Ghibli Style",
+      "StdGbRedmAF"
+    ]
+  },
+  {
+    "name": "V1_flux_klein",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/V1_flux_klein.safetensors",
+    "triggerWords": [
+      "fluxtrait",
+      "detailed skin"
+    ]
+  },
+  {
+    "name": "afterdark2",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/afterdark2.safetensors",
+    "triggerWords": [
+      "4ft3rd4rk"
+    ]
+  },
+  {
+    "name": "amateur_selfie",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/amateur_selfie.safetensors",
+    "triggerWords": [
+      "selfie"
+    ]
+  },
+  {
+    "name": "anything2real",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/anything2real.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "anything2real_v1_f2k",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/anything2real_v1_f2k.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "detail_slider",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/detail_slider.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "dramatic_dark_lighting",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/dramatic_dark_lighting.safetensors",
+    "triggerWords": [
+      "Make the lighting dramatic."
+    ]
+  },
+  {
+    "name": "lenovo_flux_klein9b",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/lenovo_flux_klein9b.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "manga",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/manga.safetensors",
+    "triggerWords": [
+      "manga style"
+    ]
+  },
+  {
+    "name": "nnegrat_illus_9b_3200",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/nnegrat_illus_9b_3200.safetensors",
+    "triggerWords": [
+      "artwork in illustyle"
+    ]
+  },
+  {
+    "name": "realism_slider",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/realism_slider.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "realistic",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/realistic.safetensors",
+    "triggerWords": [
+      "realistic"
+    ]
+  },
+  {
+    "name": "ultra_real_v1",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/ultra_real_v1.safetensors",
+    "triggerWords": [
+      "Make this photo high-quality featuring realstic skin texture. Preserve subject's facial features, expression, figure and pose. Preserve overall composition of this photo."
+    ]
+  },
+  {
+    "name": "ultra_real_v2",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/ultra_real_v2.safetensors",
+    "triggerWords": [
+      "Make this photo high-quality with natural skin texture. Preserve subject's facial features, expression, figure and pose. Preserve overall composition of this photo."
+    ]
+  },
+  {
+    "name": "upscale_portrait",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/upscale_portrait.safetensors",
+    "triggerWords": [
+      "preserve the overall impression of the image. Repair this portrait photo and refine."
+    ]
+  }
 ]
