@@ -22,6 +22,8 @@ export const POST: RequestHandler = async ({ request }) => {
     useCustomPrompt = false,
     // Shared extra params
     loraKeyword = "",
+    flux_dev_seed = 0,
+    flux_dev_lora_strength = 1,
     // FLUX.2-klein multi-LoRA stack (array of { url, keyword, scale })
     kleinLoras = [],
     // Z-Image / FLUX.2-klein extra params
@@ -380,10 +382,9 @@ RULES:
       finalPrompt = promptMatch ? promptMatch[1].trim() : responseText.trim();
     }
 
-    const { width, height } = calculateDimensions(aspectRatio);
-
     // ── Z-Image via RunPod Serverless ──────────────────────────────────────
     if (model === "z-image") {
+      const { width, height } = calculateDimensions(aspectRatio);
       const endpointUrl = env.RUNPOD_ZIMAGE_ENDPOINT || RUNPOD_ZIMAGE_ENDPOINT_DEFAULT;
       const effectiveSeed = seed === -1 ? Math.floor(Math.random() * 1000000000) : seed;
 
@@ -675,26 +676,35 @@ RULES:
     }
 
     // ── FLUX.1-dev via RunningHub ──────────────────────────────────────────
+    const { width: fluxDevWidth, height: fluxDevHeight } =
+      calculateRunningHubDimensions(aspectRatio);
+    const fluxDevSeed =
+      typeof flux_dev_seed === "number" && Number.isFinite(flux_dev_seed)
+        ? Math.round(flux_dev_seed)
+        : 0;
+    const fluxDevLoraStrength =
+      typeof flux_dev_lora_strength === "number" && Number.isFinite(flux_dev_lora_strength)
+        ? flux_dev_lora_strength
+        : 1;
     const rhubPayload = {
       nodeInfoList: [
         { nodeId: "4", fieldName: "text", fieldValue: finalPrompt },
-        { nodeId: "6", fieldName: "height", fieldValue: height.toString() },
-        { nodeId: "6", fieldName: "width", fieldValue: width.toString() },
+        { nodeId: "6", fieldName: "width", fieldValue: fluxDevWidth.toString() },
+        { nodeId: "6", fieldName: "height", fieldValue: fluxDevHeight.toString() },
         {
           nodeId: "70",
           fieldName: "value",
-          fieldValue: Math.floor(Math.random() * 1000000000).toString(),
+          fieldValue: fluxDevSeed.toString(),
         },
         { nodeId: "80", fieldName: "value", fieldValue: loraUrl },
-        { nodeId: "81", fieldName: "value", fieldValue: "1" },
+        { nodeId: "81", fieldName: "value", fieldValue: fluxDevLoraStrength.toString() },
       ],
       instanceType: "default",
       usePersonalQueue: "false",
     };
 
-    const workflowId = useTtDecoder ? "1982245789865000962" : "2021692093294452738";
     const rhubResponse = await fetch(
-      `https://www.runninghub.ai/openapi/v2/run/ai-app/${workflowId}`,
+      "https://www.runninghub.ai/openapi/v2/run/ai-app/2021692093294452738",
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${rhubKey}` },
@@ -720,4 +730,13 @@ function calculateDimensions(ar: string) {
   let h = Math.sqrt(targetArea / ratio);
   let w = h * ratio;
   return { width: Math.ceil(w / 16) * 16, height: Math.ceil(h / 16) * 16 };
+}
+
+function calculateRunningHubDimensions(ar: string) {
+  const [wRatio, hRatio] = ar.split(":").map(Number);
+  const ratio = wRatio / hRatio;
+  const targetArea = 1024 * 1024;
+  let h = Math.sqrt(targetArea / ratio);
+  let w = h * ratio;
+  return { width: Math.ceil(w / 32) * 32, height: Math.ceil(h / 32) * 32 };
 }

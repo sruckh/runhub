@@ -30,6 +30,8 @@
     let guidanceScale = $state(3.5);
     let zimageSeed = $state(-1);
     let loraScale = $state(0.85);
+    let fluxDevSeed = $state(0);
+    let fluxDevLoraStrength = $state(1);
     let shift = $state(3.0);
     let preset = $state('realistic_character');
 
@@ -301,6 +303,8 @@
             guidanceScale,
             seed: zimageSeed,
             loraScale,
+            flux_dev_seed: fluxDevSeed,
+            flux_dev_lora_strength: fluxDevLoraStrength,
             shift,
             preset,
             zimage_negative_prompt: zimageNegativePrompt,
@@ -786,18 +790,6 @@
                     </select>
                 </div>
 
-                <!-- TT-Decoder Toggle (FLUX.1-dev only) -->
-                {#if model === 'flux-dev'}
-                <div class="field toggle-field">
-                    <label for="useTtDecoder" class="toggle-label">
-                        <span class="toggle-text">Enable TT-Decoder</span>
-                        <input type="checkbox" id="useTtDecoder" bind:checked={useTtDecoder} class="toggle-checkbox" />
-                        <span class="toggle-slider-ui"></span>
-                    </label>
-                    <p class="toggle-description">Decode hidden files from returned images (LSB steganography)</p>
-                </div>
-                {/if}
-
                 {#if model === 'flux-klein' || model === 'z-image'}
                     <div class="multi-lora-section">
                         <div class="multi-lora-header">
@@ -855,8 +847,13 @@
                             <input type="text" id="loraKeyword" bind:value={loraKeyword} placeholder="e.g. K1mScum" />
                         </div>
                         <div class="field">
-                            <label for="loraScaleLegacy">LoRA Scale</label>
-                            <input type="number" id="loraScaleLegacy" bind:value={loraScale} min="0" max="2" step="0.05" />
+                            {#if model === 'flux-dev'}
+                                <label for="fluxDevLoraStrength">LoRA Strength</label>
+                                <input type="number" id="fluxDevLoraStrength" bind:value={fluxDevLoraStrength} min="0" max="2" step="0.05" />
+                            {:else}
+                                <label for="loraScaleLegacy">LoRA Scale</label>
+                                <input type="number" id="loraScaleLegacy" bind:value={loraScale} min="0" max="2" step="0.05" />
+                            {/if}
                         </div>
                     </div>
                 {/if}
@@ -899,6 +896,13 @@
                     </div>
                     {/if}
                 </div>
+
+                {#if model === 'flux-dev'}
+                    <div class="field">
+                        <label for="fluxDevSeed">Seed</label>
+                        <input type="number" id="fluxDevSeed" bind:value={fluxDevSeed} />
+                    </div>
+                {/if}
 
                 {#if model === 'rhub-zimage'}
                     <div class="field">
@@ -1307,7 +1311,7 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}{task.aspectRatio}{/if}
+                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}FLUX-RH {task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'upscale'}
