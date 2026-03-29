@@ -1,0 +1,72 @@
+[
+  {
+    "model_name": "Photo Factory",
+    "local_file": "Arlequin_E16.safetensors",
+    "page_url": "https://civitai.com/models/1719202",
+    "trigger_words": [
+      "Arlequin art style"
+    ],
+    "match_confidence": "high"
+  },
+  {
+    "model_name": "Realistic Snapshot (Z-Image-Turbo)",
+    "local_file": "RealisticSnapshot-Zimage-Turbov5.safetensors",
+    "page_url": "https://civitai.com/models/2268008",
+    "trigger_words": [],
+    "match_confidence": "high"
+  },
+  {
+    "model_name": "Z-Real",
+    "local_file": "Z-Real-v1.0.safetensors",
+    "page_url": "https://civitai.com/models/2198097",
+    "trigger_words": [
+      "z-realism"
+    ],
+    "match_confidence": "high"
+  },
+  {
+    "model_name": "Comic book",
+    "local_file": "com_book_v6_E10.safetensors",
+    "page_url": "https://civitai.com/models/830230",
+    "trigger_words": [
+      "Inkquaria art style"
+    ],
+    "match_confidence": "high"
+  },
+  {
+    "model_name": "Lenovo UltraReal",
+    "local_file": "lenovo_zimagebase.safetensors",
+    "page_url": "https://civitai.com/models/1662740",
+    "trigger_words": [],
+    "match_confidence": "high"
+  },
+  {
+    "model_name": "NiceGirls UltraReal",
+    "local_file": "nicegirls_zimagebase.safetensors",
+    "page_url": "https://civitai.com/models/1862761",
+    "trigger_words": [],
+    "match_confidence": "high"
+  },
+  {
+    "model_name": "Realistic Skin Texture style (Detailed Skin) XL + SD1.5 + F1D + Pony + Illu + ZIT + ZIB",
+    "local_file": "skin texture Photorealistic style v4.5.safetensors",
+    "page_url": "https://civitai.com/models/580857",
+    "trigger_words": [
+      "incredibly lifelike",
+      "cinematic",
+      "detailed",
+      "sharp",
+      "fine texture",
+      "Hyperrealistic",
+      "photorealistic"
+    ],
+    "match_confidence": "high"
+  },
+  {
+    "model_name": "Cinematic Shot✨",
+    "local_file": "zy_CinematicShot_zit.safetensors",
+    "page_url": "https://civitai.com/models/432586",
+    "trigger_words": [],
+    "match_confidence": "high"
+  }
+]

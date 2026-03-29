@@ -30,14 +30,29 @@
     let guidanceScale = $state(3.5);
     let zimageSeed = $state(-1);
     let loraScale = $state(0.85);
-    let shift = $state(1.5);
+    let shift = $state(3.0);
     let preset = $state('realistic_character');
+
+    // Z-Image new params
+    let zimageNegativePrompt = $state('');
+    let zimageMaxSequenceLength = $state(512);
+    let zimageUseBetaSigmas = $state(true);
+    let zimageCfgNormalization = $state(true);
+    let zimageCfgTruncation = $state(1.0);
+    let zimageVaeTiling = $state<boolean | null>(null); // null = auto
 
     // Z-Image second pass params
     let secondPassEnabled = $state(false);
-    let secondPassUpscale = $state(1.5);
-    let secondPassStrength = $state(0.18);
-    let secondPassGuidanceScale = $state(1.2);
+    let secondPassUpscale = $state(1.25);
+    let secondPassStrength = $state(0.22);
+    let secondPassGuidanceScale = $state(1.5);
+    let secondPassSteps = $state(10);
+    let secondPassMaxSequenceLength = $state(384);
+    let secondPassCfgNormalization = $state(true);
+    let secondPassCfgTruncation = $state(1.0);
+    let secondPassUseBetaSigmas = $state<boolean | null>(null); // null = inherit
+    let secondPassVaeTiling = $state(false);
+    let secondPassVaeSlicing = $state(true);
 
     // FLUX.2-klein 2nd pass / upscale params
     let kleinEnable2ndPass = $state(false);
@@ -288,10 +303,23 @@
             loraScale,
             shift,
             preset,
+            zimage_negative_prompt: zimageNegativePrompt,
+            zimage_max_sequence_length: zimageMaxSequenceLength,
+            zimage_use_beta_sigmas: zimageUseBetaSigmas,
+            zimage_cfg_normalization: zimageCfgNormalization,
+            zimage_cfg_truncation: zimageCfgTruncation,
+            zimage_vae_tiling: zimageVaeTiling,
             second_pass_enabled: secondPassEnabled,
             second_pass_upscale: secondPassUpscale,
             second_pass_strength: secondPassStrength,
             second_pass_guidance_scale: secondPassGuidanceScale,
+            second_pass_steps: secondPassSteps,
+            second_pass_max_sequence_length: secondPassMaxSequenceLength,
+            second_pass_cfg_normalization: secondPassCfgNormalization,
+            second_pass_cfg_truncation: secondPassCfgTruncation,
+            second_pass_use_beta_sigmas: secondPassUseBetaSigmas,
+            second_pass_vae_tiling: secondPassVaeTiling,
+            second_pass_vae_slicing: secondPassVaeSlicing,
             klein_enable_2nd_pass: kleinEnable2ndPass,
             klein_second_pass_strength: kleinSecondPassStrength,
             klein_second_pass_steps: kleinSecondPassSteps,
@@ -980,6 +1008,28 @@
                             <div class="field">
                                 <label for="shift">Scheduler Shift</label>
                                 <input type="number" id="shift" bind:value={shift} min="0.5" max="10" step="0.1" />
+                                <p class="field-hint">3.0–3.5 for photorealism. Higher (5–7) favours composition; lower (1–2) favours detail.</p>
+                            </div>
+                            <div class="field">
+                                <label for="zimageMaxSequenceLength">Prompt Length Limit (tokens)</label>
+                                <input type="number" id="zimageMaxSequenceLength" bind:value={zimageMaxSequenceLength} min="64" max="512" step="64" />
+                                <p class="field-hint">Max tokens read from the prompt. 512 for long detailed prompts.</p>
+                            </div>
+                            <div class="field">
+                                <label for="zimageCfgTruncation">CFG Truncation</label>
+                                <input type="number" id="zimageCfgTruncation" bind:value={zimageCfgTruncation} min="0.1" max="1.0" step="0.05" />
+                                <p class="field-hint">1.0 recommended. Lower (e.g. 0.7) to reduce over-saturation.</p>
+                            </div>
+                            <div class="field">
+                                <label for="zimageVaeTiling">VAE Tiling</label>
+                                <select id="zimageVaeTiling" value={zimageVaeTiling === null ? 'auto' : String(zimageVaeTiling)} onchange={(e) => {
+                                    const val = (e.target as HTMLSelectElement).value;
+                                    zimageVaeTiling = val === 'auto' ? null : val === 'true';
+                                }}>
+                                    <option value="auto">Auto (Area &gt; 1M)</option>
+                                    <option value="true">Force Enabled</option>
+                                    <option value="false">Force Disabled</option>
+                                </select>
                             </div>
                         {/if}
                         {#if model === 'flux-klein'}
@@ -1072,6 +1122,30 @@
                     {/if}
 
                     {#if model === 'z-image'}
+                        <div class="field" style="margin-top: 12px;">
+                            <label for="zimageNegativePrompt">Negative Prompt</label>
+                            <input type="text" id="zimageNegativePrompt" bind:value={zimageNegativePrompt} placeholder="Leave blank for photorealism default" />
+                            <p class="field-hint">Leave blank to use the built-in photorealism negative. Pass an empty string (&quot;&quot;) to disable.</p>
+                        </div>
+                        <div class="grid" style="margin-top: 4px;">
+                            <div class="field toggle-field">
+                                <label for="zimageCfgNormalization" class="toggle-label">
+                                    <span class="toggle-text">CFG Normalization</span>
+                                    <input type="checkbox" id="zimageCfgNormalization" bind:checked={zimageCfgNormalization} class="toggle-checkbox" />
+                                    <span class="toggle-slider-ui"></span>
+                                </label>
+                                <p class="toggle-description">Enabled by default for photorealism</p>
+                            </div>
+                            <div class="field toggle-field">
+                                <label for="zimageUseBetaSigmas" class="toggle-label">
+                                    <span class="toggle-text">Beta Sigmas</span>
+                                    <input type="checkbox" id="zimageUseBetaSigmas" bind:checked={zimageUseBetaSigmas} class="toggle-checkbox" />
+                                    <span class="toggle-slider-ui"></span>
+                                </label>
+                                <p class="toggle-description">FlowMatch beta-sigma scheduling</p>
+                            </div>
+                        </div>
+
                         <!-- Second Pass Options -->
                         <div class="field toggle-field" style="margin-top: 12px;">
                             <label for="secondPassEnabled" class="toggle-label">
@@ -1086,7 +1160,12 @@
                             <div class="grid second-pass-params">
                                 <div class="field">
                                     <label for="secondPassUpscale">Upscale Factor</label>
-                                    <input type="number" id="secondPassUpscale" bind:value={secondPassUpscale} min="1" max="4" step="0.1" />
+                                    <input type="number" id="secondPassUpscale" bind:value={secondPassUpscale} min="1" max="2" step="0.05" />
+                                    <p class="field-hint">1.25 recommended on 24 GB cards with LoRA. Use 1.5 only with more VRAM headroom.</p>
+                                </div>
+                                <div class="field">
+                                    <label for="secondPassSteps">Pass 2 Steps</label>
+                                    <input type="number" id="secondPassSteps" bind:value={secondPassSteps} min="1" max="30" />
                                 </div>
                                 <div class="field">
                                     <label for="secondPassStrength">Denoising Strength</label>
@@ -1094,7 +1173,47 @@
                                 </div>
                                 <div class="field">
                                     <label for="secondPassGuidanceScale">Pass 2 Guidance</label>
-                                    <input type="number" id="secondPassGuidanceScale" bind:value={secondPassGuidanceScale} min="1" max="5" step="0.1" />
+                                    <input type="number" id="secondPassGuidanceScale" bind:value={secondPassGuidanceScale} min="1" max="8" step="0.1" />
+                                </div>
+                                <div class="field">
+                                    <label for="secondPassMaxSequenceLength">Pass 2 Prompt Limit</label>
+                                    <input type="number" id="secondPassMaxSequenceLength" bind:value={secondPassMaxSequenceLength} min="64" max="512" step="64" />
+                                </div>
+                                <div class="field">
+                                    <label for="secondPassCfgTruncation">Pass 2 CFG Truncation</label>
+                                    <input type="number" id="secondPassCfgTruncation" bind:value={secondPassCfgTruncation} min="0.1" max="1.0" step="0.05" />
+                                </div>
+                                <div class="field">
+                                    <label for="secondPassUseBetaSigmas">Pass 2 Beta Sigmas</label>
+                                    <select id="secondPassUseBetaSigmas" value={secondPassUseBetaSigmas === null ? 'inherit' : String(secondPassUseBetaSigmas)} onchange={(e) => {
+                                        const val = (e.target as HTMLSelectElement).value;
+                                        secondPassUseBetaSigmas = val === 'inherit' ? null : val === 'true';
+                                    }}>
+                                        <option value="inherit">Inherit from Pass 1</option>
+                                        <option value="true">Force Enabled</option>
+                                        <option value="false">Force Disabled</option>
+                                    </select>
+                                </div>
+                                <div class="field toggle-field" style="padding-top: 24px;">
+                                    <label for="secondPassCfgNormalization" class="toggle-label">
+                                        <span class="toggle-text">Pass 2 CFG Normalization</span>
+                                        <input type="checkbox" id="secondPassCfgNormalization" bind:checked={secondPassCfgNormalization} class="toggle-checkbox" />
+                                        <span class="toggle-slider-ui"></span>
+                                    </label>
+                                </div>
+                                <div class="field toggle-field" style="padding-top: 24px;">
+                                    <label for="secondPassVaeTiling" class="toggle-label">
+                                        <span class="toggle-text">Pass 2 VAE Tiling</span>
+                                        <input type="checkbox" id="secondPassVaeTiling" bind:checked={secondPassVaeTiling} class="toggle-checkbox" />
+                                        <span class="toggle-slider-ui"></span>
+                                    </label>
+                                </div>
+                                <div class="field toggle-field" style="padding-top: 24px;">
+                                    <label for="secondPassVaeSlicing" class="toggle-label">
+                                        <span class="toggle-text">Pass 2 VAE Slicing</span>
+                                        <input type="checkbox" id="secondPassVaeSlicing" bind:checked={secondPassVaeSlicing} class="toggle-checkbox" />
+                                        <span class="toggle-slider-ui"></span>
+                                    </label>
                                 </div>
                             </div>
                         {/if}

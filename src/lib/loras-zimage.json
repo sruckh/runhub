@@ -1,10 +1,101 @@
 [
-  {"name":"AmberNoir_Enhancer","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/AmberNoir_Enhancer.safetensors","triggerWords":[]},
-  {"name":"ChiaroscuroCinematiLighting","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/ChiaroscuroCinematiLighting.safetensors","triggerWords":[]},
-  {"name":"FameGrid_Revolution_ZIB","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/FameGrid_Revolution_ZIB.safetensors","triggerWords":[]},
-  {"name":"NSFW","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/NSFW.safetensors","triggerWords":[]},
-  {"name":"PHOTOSTYLE","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/PHOTOSTYLE.safetensors","triggerWords":[]},
-  {"name":"PortraitPhotographyNationalStyle","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/PortraitPhotographyNationalStyle.safetensors","triggerWords":[]},
-  {"name":"ZAnime","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/ZAnime.safetensors","triggerWords":[]},
-  {"name":"vrtlAdrianaLima","url":"https://filez.gemneye.xyz/LoRA/Civitai/zImage/vrtlAdrianaLima.safetensors","triggerWords":[]}
+  {
+    "name": "AmberNoir_Enhancer",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/AmberNoir_Enhancer.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "Arlequin_E16",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/Arlequin_E16.safetensors",
+    "triggerWords": [
+      "Arlequin art style"
+    ]
+  },
+  {
+    "name": "ChiaroscuroCinematiLighting",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/ChiaroscuroCinematiLighting.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "FameGrid_Revolution_ZIB",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/FameGrid_Revolution_ZIB.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "FameGrid_Revolution_ZIB_BOLD_",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/FameGrid_Revolution_ZIB_BOLD_.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "NSFW",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/NSFW.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "PHOTOSTYLE",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/PHOTOSTYLE.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "PortraitPhotographyNationalStyle",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/PortraitPhotographyNationalStyle.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "RealisticSnapshot-Zimage-Turbov5",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/RealisticSnapshot-Zimage-Turbov5.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "Z-Real-v1.0",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/Z-Real-v1.0.safetensors",
+    "triggerWords": [
+      "z-realism"
+    ]
+  },
+  {
+    "name": "ZAnime",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/ZAnime.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "com_book_v6_E10",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/com_book_v6_E10.safetensors",
+    "triggerWords": [
+      "Inkquaria art style"
+    ]
+  },
+  {
+    "name": "lenovo_zimagebase",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/lenovo_zimagebase.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "nicegirls_zimagebase",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/nicegirls_zimagebase.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "skin texture Photorealistic style v4.5",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/skin texture Photorealistic style v4.5.safetensors",
+    "triggerWords": [
+      "incredibly lifelike",
+      "cinematic",
+      "detailed",
+      "sharp",
+      "fine texture",
+      "Hyperrealistic",
+      "photorealistic"
+    ]
+  },
+  {
+    "name": "vrtlAdrianaLima",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/vrtlAdrianaLima.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "zy_CinematicShot_zit",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/zy_CinematicShot_zit.safetensors",
+    "triggerWords": []
+  }
 ]

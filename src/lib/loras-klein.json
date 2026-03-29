@@ -67,6 +67,11 @@
     "triggerWords": []
   },
   {
+    "name": "Samsung_fluxklein9b",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/Samsung_fluxklein9b.safetensors",
+    "triggerWords": []
+  },
+  {
     "name": "SnapchatSelfie_Redmond",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/SnapchatSelfie_Redmond.safetensors",
     "triggerWords": [
