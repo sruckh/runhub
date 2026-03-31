@@ -9,6 +9,24 @@
     "match_confidence": "high"
   },
   {
+    "model_name": "Detailed Perfection style (Hands + Feet + Face + Body + All in one) XL + F1D + SD1.5 + Pony + Illu + zit + zib",
+    "local_file": "Hands + Feet + skin perfection style zib v1.safetensors",
+    "page_url": "https://civitai.com/models/411088",
+    "trigger_words": [
+      "ultra detailed",
+      "cinematic",
+      "detailed photorealistic cinematic style",
+      "detailed skin pore",
+      "realism style",
+      "incredibly lifelike",
+      "incredibly lifelike cinematic style",
+      "sharp",
+      "realistic style",
+      "Sharp detailed high quality image"
+    ],
+    "match_confidence": "high"
+  },
+  {
     "model_name": "Realistic Snapshot (Z-Image-Turbo)",
     "local_file": "RealisticSnapshot-Zimage-Turbov5.safetensors",
     "page_url": "https://civitai.com/models/2268008",

@@ -703,8 +703,12 @@ RULES:
       usePersonalQueue: "false",
     };
 
+    const fluxDevWorkflow = useTtDecoder
+      ? "1982245789865000962"
+      : "2021692093294452738";
+
     const rhubResponse = await fetch(
-      "https://www.runninghub.ai/openapi/v2/run/ai-app/2021692093294452738",
+      `https://www.runninghub.ai/openapi/v2/run/ai-app/${fluxDevWorkflow}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${rhubKey}` },

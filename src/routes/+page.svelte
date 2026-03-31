@@ -5,7 +5,7 @@
     let { data } = $props();
 
     // untrack: read env-backed defaults once at init without reactive tracking
-    const { geminiKey: _gk = '', rhubKey: _rk = '', runpodKey: _rpk = '' } = untrack(() => data.envKeys ?? {});
+    const { geminiKey: _gk = '', rhubKey: _rk = '', runpodKey: _rpk = '', falKey: _fk = '' } = untrack(() => data.envKeys ?? {});
     const lorasKlein: { name: string; url: string; triggerWords?: string[] }[] = untrack(() => data.lorasKlein ?? []);
     const lorasZimage: { name: string; url: string; triggerWords?: string[] }[] = untrack(() => data.lorasZimage ?? []);
 
@@ -22,6 +22,7 @@
     let geminiKey = $state(_gk);
     let rhubKey = $state(_rk);
     let runpodKey = $state(_rpk);
+    let falKey = $state(_fk);
     let promptProvider = $state('gemini');
     let model = $state('flux-dev'); // 'flux-dev' | 'flux-klein' | 'z-image'
 
@@ -131,15 +132,24 @@
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
     let useTtDecoder = $state(savedTtDecoder);
     
-    let activeTab = $state('generate'); // 'generate' or 'upscale'
+    let activeTab = $state('generate'); // 'generate' | 'upscale' | 'enhance'
     let loading = $state(false);
     let queue = $state<any[]>([]);
     let isProcessingQueue = $state(false);
 
     // Upscale states
     let upscaleFiles = $state<File[]>([]);
+
     let fileInput = $state<HTMLInputElement | null>(null);
     const upscaleFilesMap = new Map<string, File>();
+
+    // Enhance states
+    let enhanceEngine = $state('fal'); // 'fal' | 'runninghub'
+    let enhanceImageUrl = $state('');
+    let enhanceFile = $state<File | null>(null);
+    let enhanceOutputFormat = $state('jpeg');
+    let enhanceFileInput = $state<HTMLInputElement | null>(null);
+    const enhanceFileMap = new Map<string, File>();
 
     // Persist setting changes and queue
     $effect(() => {
@@ -274,8 +284,10 @@
     async function handleSubmit() {
         if (activeTab === 'generate') {
             addToQueue();
-        } else {
+        } else if (activeTab === 'upscale') {
             addUpscaleToQueue();
+        } else {
+            addEnhanceToQueue();
         }
     }
 
@@ -391,9 +403,101 @@
         queue = [...queue, ...newTasks];
         showToast(`Added ${upscaleFiles.length} upscale task(s) to queue`);
         upscaleFiles = []; // Clear selection after adding
-        
+
         if (!isProcessingQueue) {
             processQueue();
+        }
+    }
+
+    async function addEnhanceToQueue() {
+        if (enhanceEngine !== 'fal') {
+            if (!enhanceImageUrl.trim()) {
+                error = 'Please enter a publicly accessible image URL for the RunningHub engine';
+                return;
+            }
+        } else {
+            if (!enhanceFile && !enhanceImageUrl.trim()) {
+                error = 'Please upload an image or enter an image URL to enhance';
+                return;
+            }
+        }
+
+        const id = Math.random().toString(36).substring(7);
+        if (enhanceFile && enhanceEngine === 'fal') {
+            enhanceFileMap.set(id, enhanceFile);
+        }
+
+        const task = {
+            type: 'enhance',
+            id,
+            engine: enhanceEngine,
+            falKey,
+            rhubKey,
+            imageUrl: (enhanceFile && enhanceEngine === 'fal') ? '' : enhanceImageUrl.trim(),
+            outputFormat: enhanceOutputFormat,
+            outputDir,
+            prefix,
+            fileName: enhanceFile?.name || '',
+            createdAt: new Date().toISOString()
+        };
+
+        queue = [...queue, task];
+        showToast('Added enhance task to queue');
+        enhanceFile = null;
+        enhanceImageUrl = '';
+
+        if (!isProcessingQueue) {
+            processQueue();
+        }
+    }
+
+    async function startEnhance(task: any) {
+        const resultId = task.id;
+        const label = task.fileName || task.imageUrl || 'Image';
+
+        results = [{
+            id: resultId,
+            status: 'INITIALIZING',
+            prompt: `Enhancing: ${label}`,
+            outputDir: task.outputDir
+        }, ...results];
+
+        const file = enhanceFileMap.get(resultId);
+
+        try {
+            const formData = new FormData();
+            formData.append('engine', task.engine || 'fal');
+            formData.append('falKey', task.falKey);
+            formData.append('rhubKey', task.rhubKey);
+            formData.append('outputFormat', task.outputFormat);
+            formData.append('outputDir', task.outputDir);
+            formData.append('prefix', task.prefix);
+            if (file && task.engine !== 'runninghub') {
+                formData.append('image', file);
+            } else {
+                formData.append('imageUrl', task.imageUrl);
+            }
+
+            updateResult(resultId, { status: 'PROCESSING' });
+            const response = await fetch('/api/enhance', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            if (data.taskId) {
+                // RunningHub async path — hand off to the existing pollTask machinery
+                updateResult(resultId, { status: 'PROCESSING', taskId: data.taskId });
+                await pollTask(resultId, data.taskId, {
+                    rhubKey: task.rhubKey,
+                    outputDir: task.outputDir,
+                    prefix: task.prefix,
+                    useTtDecoder: false
+                });
+            } else {
+                // fal.ai synchronous path
+                updateResult(resultId, { status: 'SUCCESS', filename: data.filename, ts: Date.now() });
+            }
+        } catch (e: any) {
+            updateResult(resultId, { status: 'FAILED', error: e.message });
         }
     }
 
@@ -408,6 +512,8 @@
             const task = queue[0];
             if (task.type === 'upscale') {
                 await startUpscale(task);
+            } else if (task.type === 'enhance') {
+                await startEnhance(task);
             } else {
                 await startGeneration(task);
             }
@@ -656,6 +762,27 @@
         }
     }
 
+    async function sendToEnhance(res: any) {
+        if (!res.filename || !isImageFilename(res.filename)) {
+            showToast('Only image results can be enhanced');
+            return;
+        }
+
+        try {
+            const relativeUrl = getResultFileUrl(res);
+            const response = await fetch(relativeUrl);
+            if (!response.ok) throw new Error('Failed to load image');
+            const blob = await response.blob();
+            // Set file for fal.ai engine and absolute URL for RunningHub engine
+            enhanceFile = new File([blob], res.filename, { type: blob.type || 'image/jpeg' });
+            enhanceImageUrl = window.location.origin + relativeUrl;
+            activeTab = 'enhance';
+            showToast('Image sent to Enhance tab');
+        } catch (e) {
+            showToast('Failed to send image to Enhance tab');
+        }
+    }
+
     async function deleteResult(res: any) {
         if (!res.filename) {
             removeResultCard(res.id);
@@ -692,6 +819,23 @@
 
     function removeUpscaleFile(file: File) {
         upscaleFiles = upscaleFiles.filter(f => f !== file);
+    }
+
+    function handleEnhanceFileSelect(e: Event) {
+        const files = (e.target as HTMLInputElement).files;
+        if (files && files[0]) {
+            enhanceFile = files[0];
+            enhanceImageUrl = '';
+        }
+    }
+
+    function handleEnhanceDrop(e: DragEvent) {
+        e.preventDefault();
+        const files = e.dataTransfer?.files;
+        if (files && files[0]) {
+            enhanceFile = files[0];
+            enhanceImageUrl = '';
+        }
     }
 </script>
 
@@ -765,7 +909,10 @@
                 <button class="tab-btn {activeTab === 'upscale' ? 'active' : ''}" onclick={() => activeTab = 'upscale'}>
                     <span class="tab-icon">🚀</span> Upscale
                 </button>
-                <div class="tab-slider" style="transform: translateX({activeTab === 'generate' ? '0' : '100%'})"></div>
+                <button class="tab-btn {activeTab === 'enhance' ? 'active' : ''}" onclick={() => activeTab = 'enhance'}>
+                    <span class="tab-icon">🪄</span> Enhance
+                </button>
+                <div class="tab-slider tab-slider-3" style="transform: translateX({activeTab === 'generate' ? '0' : activeTab === 'upscale' ? '100%' : '200%'})"></div>
             </div>
         </div>
 
@@ -901,6 +1048,14 @@
                     <div class="field">
                         <label for="fluxDevSeed">Seed</label>
                         <input type="number" id="fluxDevSeed" bind:value={fluxDevSeed} />
+                    </div>
+                    <div class="field toggle-field">
+                        <label for="useTtDecoderGenerate" class="toggle-label">
+                            <span class="toggle-text">Enable TT-Decoder</span>
+                            <input type="checkbox" id="useTtDecoderGenerate" bind:checked={useTtDecoder} class="toggle-checkbox" />
+                            <span class="toggle-slider-ui"></span>
+                        </label>
+                        <p class="toggle-description">Use TT-encoded workflow — result image will be decoded before saving</p>
                     </div>
                 {/if}
 
@@ -1223,7 +1378,7 @@
                         {/if}
                     {/if}
                 {/if}
-            {:else}
+            {:else if activeTab === 'upscale'}
                 <div class="settings-header">
                     <h2>Upscale Settings</h2>
                     <span class="settings-badge">2K Resolution</span>
@@ -1265,6 +1420,76 @@
                         </div>
                     {/if}
                 </div>
+            {:else if activeTab === 'enhance'}
+                <div class="settings-header">
+                    <h2>Enhance Settings</h2>
+                    <span class="settings-badge">{enhanceEngine === 'fal' ? 'fal.ai Phota' : enhanceEngine === 'runninghub' ? 'RunningHub Enhance' : 'RunningHub Enhance+Detail'}</span>
+                </div>
+
+                <div class="field">
+                    <label for="enhanceEngine">Enhance Engine</label>
+                    <select id="enhanceEngine" bind:value={enhanceEngine}>
+                        <option value="fal">fal.ai Phota — identity-preserving</option>
+                        <option value="runninghub">RunningHub — enhance</option>
+                        <option value="runninghub-detail">RunningHub — enhance + detail</option>
+                    </select>
+                </div>
+
+                {#if enhanceEngine === 'fal'}
+                <div class="field">
+                    <label for="falKey">fal.ai API Key</label>
+                    <input type="password" id="falKey" bind:value={falKey} placeholder="Enter fal.ai Key" />
+                </div>
+
+                <div class="field">
+                    <label for="enhanceOutputFormat">Output Format</label>
+                    <select id="enhanceOutputFormat" bind:value={enhanceOutputFormat}>
+                        <option value="jpeg">JPEG</option>
+                        <option value="png">PNG</option>
+                        <option value="webp">WebP</option>
+                    </select>
+                </div>
+                {/if}
+
+                <div class="field">
+                    <label for="enhanceImageUrl">{enhanceEngine !== 'fal' ? 'Image URL (public, required)' : 'Image URL'}</label>
+                    <input
+                        type="text"
+                        id="enhanceImageUrl"
+                        bind:value={enhanceImageUrl}
+                        placeholder="https://..."
+                        oninput={() => { if (enhanceImageUrl.trim()) enhanceFile = null; }}
+                    />
+                </div>
+
+                {#if enhanceEngine === 'fal'}
+                <div class="field">
+                    <label for="enhanceFileUploadInput">Or Upload Image</label>
+                    <div
+                        class="drop-zone"
+                        onclick={() => enhanceFileInput?.click()}
+                        onkeydown={(e) => e.key === 'Enter' && enhanceFileInput?.click()}
+                        role="button"
+                        tabindex="0"
+                        ondragover={(e) => { e.preventDefault(); e.currentTarget.classList.add('dragover'); }}
+                        ondragleave={(e) => { e.currentTarget.classList.remove('dragover'); }}
+                        ondrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('dragover'); handleEnhanceDrop(e); }}
+                    >
+                        <span class="drop-icon">📤</span>
+                        <span class="drop-text">Click to upload or drag & drop</span>
+                        <input id="enhanceFileUploadInput" type="file" accept="image/*" bind:this={enhanceFileInput} onchange={handleEnhanceFileSelect} hidden />
+                    </div>
+
+                    {#if enhanceFile}
+                        <div class="file-list">
+                            <div class="file-item">
+                                <span class="file-name">{enhanceFile.name}</span>
+                                <button class="remove-file" onclick={() => enhanceFile = null}>&times;</button>
+                            </div>
+                        </div>
+                    {/if}
+                </div>
+                {/if}
             {/if}
 
             <div class="grid">
@@ -1281,7 +1506,7 @@
 
         <div class="actions">
             <button class="btn-primary main-action" onclick={handleSubmit}>
-                {activeTab === 'generate' ? (model === 'flux-dev' ? 'Add Generation to Queue' : model === 'rhub-zimage' ? 'Add ZImage Upscale to Queue' : model === 'rhub-klein' ? 'Add FLUX.2-klein to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`) : 'Add Upscale to Queue'}
+                {activeTab === 'enhance' ? 'Add Enhance to Queue' : activeTab === 'upscale' ? 'Add Upscale to Queue' : (model === 'flux-dev' ? 'Add Generation to Queue' : model === 'rhub-zimage' ? 'Add ZImage Upscale to Queue' : model === 'rhub-klein' ? 'Add FLUX.2-klein to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`)}
             </button>
             <div class="action-grid">
                 {#if loading}
@@ -1311,10 +1536,12 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}FLUX-RH {task.aspectRatio}{/if}
+                                {#if task.type === 'enhance'}ENHANCE{:else if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}FLUX-RH {task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
-                                {#if task.type === 'upscale'}
+                                {#if task.type === 'enhance'}
+                                    {task.fileName || task.imageUrl || 'Image'}
+                                {:else if task.type === 'upscale'}
                                     {task.fileName}
                                 {:else}
                                     {task.useCustomPrompt ? task.customPrompt : task.subject}
@@ -1405,6 +1632,13 @@
                                         disabled={!isImageResult}
                                     >
                                         Send to Upscale
+                                    </button>
+                                    <button
+                                        class="result-action-btn"
+                                        onclick={() => sendToEnhance(res)}
+                                        disabled={!isImageResult}
+                                    >
+                                        Send to Enhance
                                     </button>
                                     <button
                                         class="result-action-btn danger"
@@ -1640,6 +1874,9 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         z-index: 1;
+    }
+    .tab-slider-3 {
+        width: calc(33.333% - 2.667px);
     }
     .tab-icon { font-size: 1rem; }
 

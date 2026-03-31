@@ -9,6 +9,7 @@ export const load: PageServerLoad = async () => {
       rhubKey: env.RUNNINGHUB_API_KEY || "",
       geminiKey: env.GEMINI_API_KEY || "",
       runpodKey: env.RUNPOD_API_KEY || "",
+      falKey: env.FAL_KEY || "",
     },
     lorasKlein: lorasKlein as { name: string; url: string; triggerWords?: string[] }[],
     lorasZimage: lorasZimage as { name: string; url: string; triggerWords?: string[] }[],

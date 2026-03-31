@@ -27,6 +27,22 @@
     "triggerWords": []
   },
   {
+    "name": "Hands + Feet + skin perfection style zib v1",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/Hands + Feet + skin perfection style zib v1.safetensors",
+    "triggerWords": [
+      "ultra detailed",
+      "cinematic",
+      "detailed photorealistic cinematic style",
+      "detailed skin pore",
+      "realism style",
+      "incredibly lifelike",
+      "incredibly lifelike cinematic style",
+      "sharp",
+      "realistic style",
+      "Sharp detailed high quality image"
+    ]
+  },
+  {
     "name": "NSFW",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/zImage/NSFW.safetensors",
     "triggerWords": []
