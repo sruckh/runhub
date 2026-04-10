@@ -132,7 +132,7 @@
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
     let useTtDecoder = $state(savedTtDecoder);
     
-    let activeTab = $state('generate'); // 'generate' | 'upscale' | 'enhance'
+    let activeTab = $state('generate'); // 'generate' | 'upscale' | 'enhance' | 'video'
     let loading = $state(false);
     let queue = $state<any[]>([]);
     let isProcessingQueue = $state(false);
@@ -150,6 +150,15 @@
     let enhanceOutputFormat = $state('jpeg');
     let enhanceFileInput = $state<HTMLInputElement | null>(null);
     const enhanceFileMap = new Map<string, File>();
+
+    // Create Video states
+    let videoPrompt = $state('');
+    let videoImageUrls = $state<string[]>(['']);
+    let videoResolution = $state('720p');
+    let videoDuration = $state('auto');
+    let videoAspectRatio = $state('auto');
+    let videoGenerateAudio = $state(true);
+    let videoSeed = $state(-1);
 
     // Persist setting changes and queue
     $effect(() => {
@@ -286,6 +295,8 @@
             addToQueue();
         } else if (activeTab === 'upscale') {
             addUpscaleToQueue();
+        } else if (activeTab === 'video') {
+            addVideoToQueue();
         } else {
             addEnhanceToQueue();
         }
@@ -514,6 +525,8 @@
                 await startUpscale(task);
             } else if (task.type === 'enhance') {
                 await startEnhance(task);
+            } else if (task.type === 'video') {
+                await startVideo(task);
             } else {
                 await startGeneration(task);
             }
@@ -783,6 +796,153 @@
         }
     }
 
+    function addVideoImageUrl() {
+        if (videoImageUrls.length < 9) videoImageUrls = [...videoImageUrls, ''];
+    }
+    function removeVideoImageUrl(i: number) {
+        if (videoImageUrls.length > 1) videoImageUrls = videoImageUrls.filter((_, idx) => idx !== i);
+    }
+
+    async function addVideoToQueue() {
+        if (!videoPrompt.trim()) {
+            error = 'Please enter a prompt for video generation';
+            return;
+        }
+
+        const id = Math.random().toString(36).substring(7);
+        const task = {
+            type: 'video',
+            id,
+            falKey,
+            prompt: videoPrompt.trim(),
+            image_urls: videoImageUrls.filter(u => u.trim()),
+            resolution: videoResolution,
+            duration: videoDuration,
+            aspect_ratio: videoAspectRatio,
+            generate_audio: videoGenerateAudio,
+            seed: videoSeed,
+            outputDir,
+            prefix,
+            createdAt: new Date().toISOString()
+        };
+
+        queue = [...queue, task];
+        showToast('Added video generation to queue');
+
+        if (!isProcessingQueue) {
+            processQueue();
+        }
+    }
+
+    async function startVideo(task: any) {
+        const resultId = task.id;
+
+        results = [{
+            id: resultId,
+            status: 'INITIALIZING',
+            prompt: `Video: ${task.prompt.substring(0, 80)}`,
+            outputDir: task.outputDir
+        }, ...results];
+
+        try {
+            const response = await fetch('/api/video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(task)
+            });
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            updateResult(resultId, { status: 'PROCESSING', prompt: task.prompt });
+            await pollFalVideoTask(resultId, data.requestId, task);
+        } catch (e: any) {
+            updateResult(resultId, { status: 'FAILED', error: e.message });
+        }
+    }
+
+    async function pollFalVideoTask(resultId: string, requestId: string, task: any) {
+        const startTime = Date.now();
+        let loadingNotified = false;
+
+        while (!isCancelled) {
+            if (!loadingNotified && (Date.now() - startTime) > 30000) {
+                updateResult(resultId, { status: 'LOADING_MODEL' });
+                loadingNotified = true;
+            }
+
+            try {
+                const response = await fetch('/api/video-check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        requestId,
+                        falKey: task.falKey,
+                        outputDir: task.outputDir,
+                        prefix: task.prefix
+                    })
+                });
+                const data = await response.json();
+
+                if (data.status === 'SUCCESS') {
+                    updateResult(resultId, { status: 'SUCCESS', filename: data.filename, ts: Date.now() });
+                    break;
+                } else if (data.status === 'FAILED') {
+                    updateResult(resultId, { status: 'FAILED', error: data.error });
+                    break;
+                }
+            } catch (e: any) {
+                updateResult(resultId, { status: 'FAILED', error: 'Polling error: ' + e.message });
+                break;
+            }
+            await new Promise(r => setTimeout(r, 5000));
+        }
+
+        if (isCancelled && results.find(r => r.id === resultId)?.status !== 'SUCCESS') {
+            updateResult(resultId, { status: 'CANCELLED', error: 'Operation cancelled' });
+        }
+    }
+
+    async function sendToVideo(res: any) {
+        if (!res.filename || !isImageFilename(res.filename)) {
+            showToast('Only image results can be used as video reference');
+            return;
+        }
+
+        try {
+            const response = await fetch(getResultFileUrl(res));
+            if (!response.ok) throw new Error('Failed to load image');
+            const blob = await response.blob();
+            const buffer = await blob.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            const base64 = btoa(binary);
+            const dataUri = `data:${blob.type || 'image/jpeg'};base64,${base64}`;
+
+            const emptyIdx = videoImageUrls.findIndex(u => !u.trim());
+            if (emptyIdx >= 0) {
+                videoImageUrls = videoImageUrls.map((u, i) => i === emptyIdx ? dataUri : u);
+            } else if (videoImageUrls.length < 9) {
+                videoImageUrls = [...videoImageUrls, dataUri];
+            } else {
+                showToast('Maximum 9 reference images reached');
+                return;
+            }
+            activeTab = 'video';
+            showToast('Image added as video reference');
+        } catch (e) {
+            showToast('Failed to send image to video tab');
+        }
+    }
+
+    function isVideoFilename(filename?: string) {
+        if (!filename) return false;
+        return filename.split('.').pop()?.toLowerCase() === 'mp4';
+    }
+
     async function deleteResult(res: any) {
         if (!res.filename) {
             removeResultCard(res.id);
@@ -912,7 +1072,10 @@
                 <button class="tab-btn {activeTab === 'enhance' ? 'active' : ''}" onclick={() => activeTab = 'enhance'}>
                     <span class="tab-icon">🪄</span> Enhance
                 </button>
-                <div class="tab-slider tab-slider-3" style="transform: translateX({activeTab === 'generate' ? '0' : activeTab === 'upscale' ? '100%' : '200%'})"></div>
+                <button class="tab-btn {activeTab === 'video' ? 'active' : ''}" onclick={() => activeTab = 'video'}>
+                    <span class="tab-icon">🎬</span> Create Video
+                </button>
+                <div class="tab-slider tab-slider-4" style="transform: translateX({activeTab === 'generate' ? '0' : activeTab === 'upscale' ? '100%' : activeTab === 'enhance' ? '200%' : '300%'})"></div>
             </div>
         </div>
 
@@ -1490,6 +1653,107 @@
                     {/if}
                 </div>
                 {/if}
+            {:else if activeTab === 'video'}
+                <div class="settings-header">
+                    <h2>Create Video</h2>
+                    <span class="settings-badge">Seedance 2.0 — fal.ai</span>
+                </div>
+
+                <div class="field">
+                    <label for="videoFalKey">fal.ai API Key</label>
+                    <input type="password" id="videoFalKey" bind:value={falKey} placeholder="Enter fal.ai Key" />
+                </div>
+
+                <div class="field">
+                    <label for="videoPrompt">Prompt <span style="color:#ef4444">*</span></label>
+                    <textarea
+                        id="videoPrompt"
+                        bind:value={videoPrompt}
+                        rows="3"
+                        placeholder="Describe the video. Reference images in the prompt as @Image1, @Image2, etc."
+                    ></textarea>
+                </div>
+
+                <div class="multi-lora-section">
+                    <div class="multi-lora-header">
+                        <span class="multi-lora-label">Reference Images (optional, up to 9)</span>
+                        {#if videoImageUrls.length < 9}
+                            <button type="button" class="add-lora-btn" onclick={addVideoImageUrl}>+ Add Image</button>
+                        {/if}
+                    </div>
+                    {#each videoImageUrls as _imgUrl, i}
+                        <div class="lora-entry">
+                            <div class="lora-entry-fields">
+                                <div class="field">
+                                    <label for="videoImg_{i}">
+                                        Image {i + 1}
+                                        {#if videoImageUrls[i].startsWith('data:')}
+                                            <span class="badge-embedded">embedded</span>
+                                        {/if}
+                                    </label>
+                                    {#if videoImageUrls[i].startsWith('data:')}
+                                        <div class="embedded-image-row">
+                                            <img class="embedded-thumb" src={videoImageUrls[i]} alt="Reference {i + 1}" />
+                                            <span class="field-hint">Embedded from queue — will be sent as base64</span>
+                                        </div>
+                                    {:else}
+                                        <input
+                                            type="text"
+                                            id="videoImg_{i}"
+                                            bind:value={videoImageUrls[i]}
+                                            placeholder="https://... (JPEG, PNG, WebP — max 30 MB)"
+                                        />
+                                    {/if}
+                                </div>
+                            </div>
+                            {#if videoImageUrls.length > 1}
+                                <button type="button" class="remove-lora-btn" onclick={() => removeVideoImageUrl(i)}>×</button>
+                            {/if}
+                        </div>
+                    {/each}
+                </div>
+
+                <div class="grid">
+                    <div class="field">
+                        <label for="videoResolution">Resolution</label>
+                        <select id="videoResolution" bind:value={videoResolution}>
+                            <option value="480p">480p — Faster</option>
+                            <option value="720p">720p — Balanced</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="videoDuration">Duration</label>
+                        <select id="videoDuration" bind:value={videoDuration}>
+                            <option value="auto">Auto (model decides)</option>
+                            {#each Array.from({length: 12}, (_, i) => i + 4) as sec}
+                                <option value={String(sec)}>{sec}s</option>
+                            {/each}
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="videoAspectRatio">Aspect Ratio</label>
+                        <select id="videoAspectRatio" bind:value={videoAspectRatio}>
+                            <option value="auto">Auto</option>
+                            <option value="21:9">21:9 — Ultrawide</option>
+                            <option value="16:9">16:9 — Landscape</option>
+                            <option value="4:3">4:3</option>
+                            <option value="1:1">1:1 — Square</option>
+                            <option value="3:4">3:4</option>
+                            <option value="9:16">9:16 — Portrait</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="videoSeed">Seed (-1 = random)</label>
+                        <input type="number" id="videoSeed" bind:value={videoSeed} min="-1" step="1" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="checkbox-label">
+                        <input type="checkbox" bind:checked={videoGenerateAudio} />
+                        Generate Audio — synchronized sound effects, ambient audio &amp; lip-sync
+                    </label>
+                </div>
             {/if}
 
             <div class="grid">
@@ -1506,7 +1770,7 @@
 
         <div class="actions">
             <button class="btn-primary main-action" onclick={handleSubmit}>
-                {activeTab === 'enhance' ? 'Add Enhance to Queue' : activeTab === 'upscale' ? 'Add Upscale to Queue' : (model === 'flux-dev' ? 'Add Generation to Queue' : model === 'rhub-zimage' ? 'Add ZImage Upscale to Queue' : model === 'rhub-klein' ? 'Add FLUX.2-klein to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`)}
+                {activeTab === 'enhance' ? 'Add Enhance to Queue' : activeTab === 'upscale' ? 'Add Upscale to Queue' : activeTab === 'video' ? 'Add Video to Queue' : (model === 'flux-dev' ? 'Add Generation to Queue' : model === 'rhub-zimage' ? 'Add ZImage Upscale to Queue' : model === 'rhub-klein' ? 'Add FLUX.2-klein to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`)}
             </button>
             <div class="action-grid">
                 {#if loading}
@@ -1536,11 +1800,13 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'enhance'}ENHANCE{:else if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}FLUX-RH {task.aspectRatio}{/if}
+                                {#if task.type === 'enhance'}ENHANCE{:else if task.type === 'video'}VIDEO{:else if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}FLUX-RH {task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'enhance'}
                                     {task.fileName || task.imageUrl || 'Image'}
+                                {:else if task.type === 'video'}
+                                    {task.prompt}
                                 {:else if task.type === 'upscale'}
                                     {task.fileName}
                                 {:else}
@@ -1564,6 +1830,7 @@
                 {#each results as res (res.id)}
                     {@const hasFile = Boolean(res.filename)}
                     {@const isImageResult = hasFile && isImageFilename(res.filename)}
+                    {@const isVideoResult = hasFile && isVideoFilename(res.filename)}
                     {@const fileUrl = hasFile ? getResultFileUrl(res) : ''}
                     <div class="result-item">
                         <div class="result-header">
@@ -1582,6 +1849,8 @@
                                             <img src={fileUrl} alt="Generated" />
                                             <div class="img-overlay">Click to Enlarge</div>
                                         </button>
+                                    {:else if fileExt === 'mp4'}
+                                        <video class="video-preview" src={fileUrl} controls></video>
                                     {:else}
                                         <a class="file-download" href={fileUrl} download={res.filename}>
                                             <div class="file-icon">📄</div>
@@ -1615,9 +1884,9 @@
                                         Full Screen
                                     </button>
                                     {#if hasFile}
-                                        <a class="result-action-btn" href={fileUrl} download={res.filename}>Save Image</a>
+                                        <a class="result-action-btn" href={fileUrl} download={res.filename}>{isVideoResult ? 'Save Video' : 'Save Image'}</a>
                                     {:else}
-                                        <span class="result-action-btn disabled-link">Save Image</span>
+                                        <span class="result-action-btn disabled-link">Save</span>
                                     {/if}
                                     <button
                                         class="result-action-btn"
@@ -1639,6 +1908,13 @@
                                         disabled={!isImageResult}
                                     >
                                         Send to Enhance
+                                    </button>
+                                    <button
+                                        class="result-action-btn"
+                                        onclick={() => sendToVideo(res)}
+                                        disabled={!isImageResult}
+                                    >
+                                        Send to Video
                                     </button>
                                     <button
                                         class="result-action-btn danger"
@@ -1878,6 +2154,9 @@
     .tab-slider-3 {
         width: calc(33.333% - 2.667px);
     }
+    .tab-slider-4 {
+        width: calc(25% - 3px);
+    }
     .tab-icon { font-size: 1rem; }
 
     /* Drop Zone Styles */
@@ -1900,6 +2179,58 @@
     }
     .drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
     .drop-text { font-size: 0.95rem; color: #475569; font-weight: 500; }
+
+    /* Video tab */
+    .video-preview {
+        width: 100%;
+        border-radius: 8px;
+        max-height: 360px;
+        background: #000;
+        display: block;
+    }
+    .embedded-image-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 0;
+    }
+    .embedded-thumb {
+        width: 64px;
+        height: 64px;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        flex-shrink: 0;
+    }
+    .badge-embedded {
+        display: inline-block;
+        background: #dbeafe;
+        color: #1d4ed8;
+        font-size: 0.65rem;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 4px;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+    .field-hint {
+        font-size: 0.78rem;
+        color: #64748b;
+    }
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        color: #374151;
+    }
+    .checkbox-label input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #2563eb;
+    }
 
     .file-list {
         display: flex;
