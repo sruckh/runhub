@@ -13,3 +13,4 @@ civitai-add-lora.sh
 generate-loras.sh
 civitai_flux2_klein_9b_triggers.json
 civitai_flux2_klein_9b_triggers.py
+.codex
