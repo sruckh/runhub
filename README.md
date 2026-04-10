@@ -1,8 +1,8 @@
 # rhub — RunningHub Precision Control Center
 
-> **Advanced image generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation (FLUX.1-dev via RunningHub, Z-Image via RunPod Serverless, and FLUX.2-klein via RunPod Serverless), multi-LoRA additive blending, sequential batch queuing, image upscaling with LSB steganography support, and real-time polling.**
+> **Advanced image and video generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation (FLUX.1-dev via RunningHub, Z-Image via RunPod Serverless, and FLUX.2-klein via RunPod Serverless), multi-LoRA additive blending, sequential batch queuing, image upscaling with LSB steganography support, image enhancement via fal.ai Phota and RunningHub workflows, video creation via fal.ai Seedance 2.0, and real-time polling.**
 
-**rhub** is a specialized SvelteKit-based dashboard that transforms simple subject descriptions into high-quality, LoRA-consistent imagery. It solves the "repetition problem" in AI generation by bridging expert prompt engineering (Gemini/Qwen) with multiple synthesis pipelines.
+**rhub** is a specialized SvelteKit-based dashboard that transforms simple subject descriptions into high-quality, LoRA-consistent imagery and video. It solves the "repetition problem" in AI generation by bridging expert prompt engineering (Gemini/Qwen) with multiple synthesis pipelines.
 
 ## Key Features
 
@@ -11,10 +11,12 @@
 - **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed prompts via a 2-step process: location selection + AI composition. Each model has a specialized Prompt Director tuned for its strengths.
 - **FLUX.2-klein Support** — 9B-parameter undistilled flow-match transformer by Black Forest Labs, with quality presets, multi-LoRA support, optional detail refinement (2nd pass), and server-side upscaling.
 - **Image Upscaling** — Batch upscale images to 2K resolution using specialized RunningHub workflows. Handles intermediary storage via S3 (e.g., Backblaze B2) with automatic presigned URL generation.
+- **Image Enhancement** — Enhance images via the **Enhance** tab using **fal.ai Phota** or two RunningHub workflows (standard Enhance or Enhance+Detail). Accepts image file uploads or URLs. Any generated image in the queue can be sent directly to Enhance.
+- **Video Creation** — Create videos via the **Create Video** tab using **fal.ai Seedance 2.0** (`bytedance/seedance-2.0/reference-to-video`). Supports up to 9 reference images (URL or local upload), up to 3 reference audio files (URL or local upload), resolution, duration, aspect ratio, and audio generation options. FAL jobs are polled asynchronously and videos are saved to the output volume. Any generated image in the queue can be sent directly to the video tab as a reference image.
 - **LSB Steganography (TT-Decoder/Encoder)** — Built-in TypeScript support for both extracting hidden data from generated images and **embedding data into carrier images** for secure upscale processing.
 - **Persistent Sequential Queue** — Bypasses RunningHub's single-task limitation with a robust client-side queue. Captures full form state (LoRA, model, output dir, API keys) per task, survives page refreshes, and processes jobs one-by-one.
 - **Environment-backed API Keys** — API keys can be pre-configured in `.env` and are automatically used as defaults. UI fields override them on a per-session basis.
-- **Modern Tabbed UI** — Segmented control interface with smooth sliding indicators for seamless switching between Generation and Upscaling modes.
+- **Modern Tabbed UI** — 4-tab segmented control interface (Generate, Upscale, Enhance, Create Video) with smooth sliding indicators and responsive mobile layout.
 - **300 Curated Locations** — Module-level Fisher-Yates shuffled queue of 300 unique locations ensures zero repetition across large batches.
 - **Flexible Dimensions** — 9 aspect ratio presets for FLUX.1-dev and Z-Image (16px-aligned auto-calculation), plus 12 dedicated aspect ratio presets for FLUX.2-klein (landscape, square, and portrait — all ~1K resolution, 32px-aligned).
 - **Containerized Deployment** — Fully Dockerized with environment-based configuration for secrets and server limits.
@@ -23,7 +25,7 @@
 
 ![Architecture Diagram](./docs/diagrams/architecture.svg)
 
-The application runs as a single SvelteKit container. API routes handle server-side logic including AI prompt synthesis, S3 uploads, RunningHub interaction, and direct RunPod Serverless calls. Images are served directly from a Docker-mounted volume to prevent caching issues and ensure persistence.
+The application runs as a single SvelteKit container. API routes handle server-side logic including AI prompt synthesis, S3 uploads, RunningHub interaction, direct RunPod Serverless calls, fal.ai enhancement, and fal.ai video generation. Images and videos are served directly from a Docker-mounted volume to prevent caching issues and ensure persistence.
 
 ## Data Flow
 
@@ -58,6 +60,22 @@ The application runs as a single SvelteKit container. API routes handle server-s
 4. Job is submitted to the RunPod FLUX.2-klein Serverless endpoint (`/run`).
 5. The client polls `/api/zimage-check` until the job completes, then downloads the JPEG from the S3 presigned URL returned by RunPod.
 
+### Enhance Flow
+
+1. User opens the **Enhance** tab and selects an engine: **fal.ai Phota**, **RunningHub Enhance**, or **RunningHub Enhance+Detail**.
+2. User provides an image (file upload or URL). Any result in the queue can be sent directly via **Send to Enhance**.
+3. For fal.ai Phota: image is submitted to `fal-ai/phota/enhance` synchronously; result is downloaded and saved.
+4. For RunningHub engines: task is submitted to the respective RunningHub app; client polls `/api/enhance-check` for completion and downloads the result.
+
+### Video Creation Flow
+
+1. User opens the **Create Video** tab and writes a prompt.
+2. Optionally adds up to 9 reference images (paste URL or upload from device) and up to 3 reference audio files (paste URL or upload from device). Any image result in the queue can be sent directly via **Send to Video**.
+3. User configures resolution (480p/720p), duration, aspect ratio, audio generation, and optional seed.
+4. Clicking **Add Video to Queue** submits the task to the queue.
+5. Background processor submits to `POST https://queue.fal.run/bytedance/seedance-2.0/reference-to-video`.
+6. Client polls `/api/video-check` every 5 seconds. When complete, the mp4 is downloaded and saved to the output volume.
+
 ### Upscale Flow
 
 1. User uploads images via the **Upscale** tab.
@@ -73,8 +91,9 @@ The application runs as a single SvelteKit container. API routes handle server-s
 
 - [Docker](https://docs.docker.com/get-docker/) & Docker Compose
 - A [Google Gemini API key](https://aistudio.google.com/apikey) or a [RunPod API key](https://www.runpod.io/)
-- A [RunningHub API key](https://www.runninghub.ai/) (required for FLUX.1-dev and Upscaling)
+- A [RunningHub API key](https://www.runninghub.ai/) (required for FLUX.1-dev, Upscaling, and RunningHub Enhance)
 - A [RunPod API key](https://www.runpod.io/) (required for Z-Image, FLUX.2-klein, and Qwen prompt provider)
+- A [fal.ai API key](https://fal.ai/) (required for Enhance via Phota and Create Video)
 - **S3-compatible Storage** (Required for Upscaling) — e.g., [Backblaze B2](https://www.backblaze.com/cloud-storage).
 
 ### Run with Docker (Recommended)
@@ -101,19 +120,20 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 ### Environment Variables
 
-| Variable                     | Required                                  | Description                                                         |
-| ---------------------------- | ----------------------------------------- | ------------------------------------------------------------------- |
-| `RUNNINGHUB_API_KEY`         | For FLUX.1-dev & Upscaling                | RunningHub API key                                                  |
-| `GEMINI_API_KEY`             | For Gemini prompt provider                | Google Gemini API key                                               |
-| `RUNPOD_API_KEY`             | For Z-Image, FLUX.2-klein & Qwen provider | RunPod API key                                                      |
-| `RUNPOD_ZIMAGE_ENDPOINT`     | For Z-Image                               | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
-| `RUNPOD_FLUX_KLEIN_ENDPOINT` | For FLUX.2-klein                          | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
-| `S3_ENDPOINT`                | For Upscaling                             | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
-| `S3_BUCKET`                  | For Upscaling                             | Name of the bucket for intermediary image storage                   |
-| `S3_ACCESS_KEY_ID`           | For Upscaling                             | S3 access key ID                                                    |
-| `S3_SECRET_ACCESS_KEY`       | For Upscaling                             | S3 secret access key                                                |
-| `S3_REGION`                  | For Upscaling                             | S3 region (default: `us-east-1`)                                    |
-| `BODY_SIZE_LIMIT`            | Always                                    | Maximum upload size in bytes (e.g., `52428800` for 50MB)            |
+| Variable                     | Required                                        | Description                                                         |
+| ---------------------------- | ----------------------------------------------- | ------------------------------------------------------------------- |
+| `RUNNINGHUB_API_KEY`         | For FLUX.1-dev, Upscaling & RunningHub Enhance  | RunningHub API key                                                  |
+| `GEMINI_API_KEY`             | For Gemini prompt provider                      | Google Gemini API key                                               |
+| `RUNPOD_API_KEY`             | For Z-Image, FLUX.2-klein & Qwen provider       | RunPod API key                                                      |
+| `FAL_KEY`                    | For Enhance (Phota) & Create Video              | fal.ai API key                                                      |
+| `RUNPOD_ZIMAGE_ENDPOINT`     | For Z-Image                                     | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
+| `RUNPOD_FLUX_KLEIN_ENDPOINT` | For FLUX.2-klein                                | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
+| `S3_ENDPOINT`                | For Upscaling                                   | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
+| `S3_BUCKET`                  | For Upscaling                                   | Name of the bucket for intermediary image storage                   |
+| `S3_ACCESS_KEY_ID`           | For Upscaling                                   | S3 access key ID                                                    |
+| `S3_SECRET_ACCESS_KEY`       | For Upscaling                                   | S3 secret access key                                                |
+| `S3_REGION`                  | For Upscaling                                   | S3 region (default: `us-east-1`)                                    |
+| `BODY_SIZE_LIMIT`            | Always                                          | Maximum upload size in bytes (e.g., `52428800` for 50MB)            |
 
 ### Web UI Settings
 
@@ -124,6 +144,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | **RunningHub API Key** | Overrides `RUNNINGHUB_API_KEY` env var for this session                                                      |
 | **Gemini API Key**     | Overrides `GEMINI_API_KEY` env var for this session                                                          |
 | **RunPod API Key**     | Overrides `RUNPOD_API_KEY` env var for this session                                                          |
+| **fal.ai API Key**     | Overrides `FAL_KEY` env var for this session (used by Enhance and Create Video)                              |
 | **Enable TT-Decoder**  | Toggle LSB steganography decoding/encoding (FLUX.1-dev only, persisted in localStorage)                      |
 
 ### Generation Parameters
@@ -169,6 +190,21 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | ↳ Upscale Factor           | `2.0`                 | Scale multiplier (0.25–4×).                                                                                                                                                                                                                                       |
 | ↳ Upscale Blend            | `0.35`                | Blending factor between original and upscaled features.                                                                                                                                                                                                           |
 
+#### Create Video (fal.ai Seedance 2.0)
+
+| Parameter           | Default       | Description                                                                          |
+| ------------------- | ------------- | ------------------------------------------------------------------------------------ |
+| Prompt              | —             | Text description of the video. Reference images as `@Image1`, audio as `@Audio1`.   |
+| Reference Images    | up to 9       | JPEG/PNG/WebP — paste URL or upload from device. Sent as `image_urls[]`.            |
+| Resolution          | `720p`        | `480p` (faster) or `720p` (balanced).                                                |
+| Duration            | `auto`        | `auto` or 4–15 seconds.                                                              |
+| Aspect Ratio        | `auto`        | `auto`, `21:9`, `16:9`, `4:3`, `1:1`, `3:4`, `9:16`.                                |
+| Generate Audio      | on            | Synthesize synchronized sound effects, ambient audio, and lip-sync.                  |
+| Reference Audio     | up to 3       | MP3/WAV — paste URL or upload from device (shown when Generate Audio is on).        |
+| Seed                | `-1` (random) | Fixed seed for reproducibility.                                                      |
+| Output Directory    | `generations` | Sub-folder inside `/mount` where the mp4 is saved.                                   |
+| Filename Prefix     | `video`       | Prefix applied to saved mp4 filenames.                                               |
+
 ## API Reference
 
 ### `POST /api/generate`
@@ -191,9 +227,21 @@ Handles multipart form uploads. Encodes images if requested, uploads to S3, and 
 
 Polls RunningHub task status and handles post-processing (image download + optional TT-Decode).
 
+### `POST /api/enhance`
+
+Handles image enhancement. Accepts multipart form with `engine` (`fal`, `runninghub`, `runninghub-detail`), image file or URL. For fal.ai Phota: runs synchronously and returns `{ filename }`. For RunningHub engines: submits task and returns `{ taskId }` for polling.
+
+### `POST /api/video`
+
+Submits a video generation job to the fal.ai queue (`bytedance/seedance-2.0/reference-to-video`). Returns `{ requestId, statusUrl, responseUrl, outputDir, prefix }`.
+
+### `POST /api/video-check`
+
+Polls a fal.ai video job for completion. When complete, downloads the mp4 and saves it to the output directory. Returns `{ status, filename }`.
+
 ### `GET /api/images/[...path]`
 
-Serves generated/upscaled images from the mounted output volume.
+Serves generated/upscaled/enhanced images and videos from the mounted output volume.
 
 ## Project Structure
 
@@ -208,13 +256,16 @@ rhub/
 │   │   ├── s3.ts                     # S3 Client & Presigned URL logic
 │   │   └── locations.ts              # 300 photogenic locations
 │   └── routes/
-│       ├── +page.svelte              # Main UI (Runes) — Generate & Upscale tabs
+│       ├── +page.svelte              # Main UI (Runes) — Generate, Upscale, Enhance & Create Video tabs
 │       ├── +page.server.ts           # Server load — passes env-backed API keys + LoRA lists to UI
 │       └── api/
 │           ├── generate/             # AI Synthesis + Multi-model Submission
 │           ├── zimage-check/         # RunPod job polling + image download (Z-Image & FLUX.2-klein)
 │           ├── upscale/              # Upload + Encoding + S3 Hosting
 │           ├── check/                # RunningHub task polling + TT-Decode
+│           ├── enhance/              # Image enhancement (fal.ai Phota / RunningHub workflows)
+│           ├── video/                # fal.ai Seedance 2.0 video submission
+│           ├── video-check/          # fal.ai video job polling + mp4 download
 │           └── images/               # Static file serving from /mount
 ├── generate-loras.sh                 # Host script — regenerates LoRA JSON configs from local dirs
 ├── .env.example                      # Template for secrets and limits
@@ -242,6 +293,8 @@ The script scans:
 - **Backend**: Node.js, AWS SDK (S3), pngjs
 - **AI**: Gemini 3 Flash / RunPod Qwen 30B
 - **Image Generation**: FLUX.1-dev (RunningHub) / Z-Image (RunPod Serverless) / FLUX.2-klein (RunPod Serverless)
+- **Image Enhancement**: fal.ai Phota / RunningHub Enhance workflows
+- **Video Generation**: fal.ai Seedance 2.0 (`bytedance/seedance-2.0/reference-to-video`)
 - **Infrastructure**: Docker, Docker Compose
 
 ## License

@@ -1743,34 +1743,32 @@
                     </div>
                     <input type="file" accept="image/jpeg,image/png,image/webp" bind:this={videoFileInput} onchange={handleVideoFileSelect} hidden />
                     {#each videoImageUrls as _imgUrl, i}
-                        <div class="lora-entry">
-                            <div class="lora-entry-fields video-ref-fields">
-                                <div class="field">
-                                    <label for="videoImg_{i}">
-                                        Image {i + 1}
-                                        {#if videoImageUrls[i].startsWith('data:')}
-                                            <span class="badge-embedded">uploaded</span>
-                                        {/if}
-                                    </label>
-                                    <div class="video-img-input-row">
-                                        {#if videoImageUrls[i].startsWith('data:')}
-                                            <span class="embedded-url-placeholder">Uploaded image</span>
-                                            <button type="button" class="upload-btn-inline" title="Replace with new file" onclick={() => openVideoFileUpload(i)}>📁</button>
-                                            <button type="button" class="upload-btn-inline" title="Clear — switch to URL" onclick={() => clearVideoImageUrl(i)}>✕</button>
-                                        {:else}
-                                            <input type="text" id="videoImg_{i}" bind:value={videoImageUrls[i]} placeholder="https://... or use 📁 to upload (JPEG, PNG, WebP)" />
-                                            <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoFileUpload(i)}>📁</button>
+                        <div class="video-ref-slot">
+                            <label class="video-ref-label" for="videoImg_{i}">
+                                Image {i + 1}
+                                {#if videoImageUrls[i].startsWith('data:')}
+                                    <span class="badge-embedded">uploaded</span>
+                                {/if}
+                            </label>
+                            {#if videoImageUrls[i].startsWith('data:')}
+                                <div class="video-ref-embedded">
+                                    <img class="embedded-thumb" src={videoImageUrls[i]} alt="Image {i + 1}" />
+                                    <div class="video-ref-embedded-actions">
+                                        <button type="button" class="add-lora-btn" onclick={() => openVideoFileUpload(i)}>📁 Replace</button>
+                                        <button type="button" class="add-lora-btn" onclick={() => clearVideoImageUrl(i)}>✕ Clear</button>
+                                        {#if videoImageUrls.length > 1}
+                                            <button type="button" class="add-lora-btn" onclick={() => removeVideoImageUrl(i)}>− Remove slot</button>
                                         {/if}
                                     </div>
-                                    {#if videoImageUrls[i].startsWith('data:')}
-                                        <div class="embedded-thumb-row">
-                                            <img class="embedded-thumb" src={videoImageUrls[i]} alt="Image {i + 1}" />
-                                        </div>
+                                </div>
+                            {:else}
+                                <div class="video-ref-row">
+                                    <input type="text" id="videoImg_{i}" bind:value={videoImageUrls[i]} placeholder="Paste URL or use 📁 to upload (JPEG, PNG, WebP)" style="flex: 1; min-width: 0;" />
+                                    <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoFileUpload(i)}>📁</button>
+                                    {#if videoImageUrls.length > 1}
+                                        <button type="button" class="upload-btn-inline" title="Remove" onclick={() => removeVideoImageUrl(i)}>×</button>
                                     {/if}
                                 </div>
-                            </div>
-                            {#if videoImageUrls.length > 1}
-                                <button type="button" class="remove-lora-btn" onclick={() => removeVideoImageUrl(i)}>×</button>
                             {/if}
                         </div>
                     {/each}
@@ -1833,29 +1831,32 @@
                     <p class="toggle-description" style="margin: 0 0 10px">MP3 or WAV files to guide audio style. Refer in prompt as @Audio1, @Audio2, etc.</p>
                     <input type="file" accept="audio/mpeg,audio/wav" bind:this={videoAudioFileInput} onchange={handleVideoAudioFileSelect} hidden />
                     {#each videoAudioUrls as _aUrl, i}
-                        <div class="lora-entry">
-                            <div class="lora-entry-fields video-ref-fields">
-                                <div class="field">
-                                    <label for="videoAudio_{i}">
-                                        Audio {i + 1}
-                                        {#if videoAudioUrls[i].startsWith('data:')}
-                                            <span class="badge-embedded">uploaded</span>
-                                        {/if}
-                                    </label>
-                                    <div class="video-img-input-row">
-                                        {#if videoAudioUrls[i].startsWith('data:')}
-                                            <span class="embedded-url-placeholder">Uploaded audio</span>
-                                            <button type="button" class="upload-btn-inline" title="Replace" onclick={() => openVideoAudioUpload(i)}>📁</button>
-                                            <button type="button" class="upload-btn-inline" title="Clear" onclick={() => clearVideoAudioUrl(i)}>✕</button>
-                                        {:else}
-                                            <input type="text" id="videoAudio_{i}" bind:value={videoAudioUrls[i]} placeholder="https://... or use 📁 to upload (MP3, WAV)" />
-                                            <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoAudioUpload(i)}>📁</button>
+                        <div class="video-ref-slot">
+                            <label class="video-ref-label" for="videoAudio_{i}">
+                                Audio {i + 1}
+                                {#if videoAudioUrls[i].startsWith('data:')}
+                                    <span class="badge-embedded">uploaded</span>
+                                {/if}
+                            </label>
+                            {#if videoAudioUrls[i].startsWith('data:')}
+                                <div class="video-ref-embedded">
+                                    <span class="embedded-audio-icon">🎵</span>
+                                    <div class="video-ref-embedded-actions">
+                                        <button type="button" class="add-lora-btn" onclick={() => openVideoAudioUpload(i)}>📁 Replace</button>
+                                        <button type="button" class="add-lora-btn" onclick={() => clearVideoAudioUrl(i)}>✕ Clear</button>
+                                        {#if videoAudioUrls.length > 1}
+                                            <button type="button" class="add-lora-btn" onclick={() => removeVideoAudioUrl(i)}>− Remove slot</button>
                                         {/if}
                                     </div>
                                 </div>
-                            </div>
-                            {#if videoAudioUrls.length > 1}
-                                <button type="button" class="remove-lora-btn" onclick={() => removeVideoAudioUrl(i)}>×</button>
+                            {:else}
+                                <div class="video-ref-row">
+                                    <input type="text" id="videoAudio_{i}" bind:value={videoAudioUrls[i]} placeholder="Paste URL or use 📁 to upload (MP3, WAV)" style="flex: 1; min-width: 0;" />
+                                    <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoAudioUpload(i)}>📁</button>
+                                    {#if videoAudioUrls.length > 1}
+                                        <button type="button" class="upload-btn-inline" title="Remove" onclick={() => removeVideoAudioUrl(i)}>×</button>
+                                    {/if}
+                                </div>
                             {/if}
                         </div>
                     {/each}
@@ -2266,6 +2267,11 @@
     }
     .tab-icon { font-size: 1rem; }
 
+    @media (max-width: 520px) {
+        .tab-btn { padding: 8px 6px; font-size: 0.72rem; gap: 4px; }
+        .tab-icon { display: none; }
+    }
+
     /* Drop Zone Styles */
     .drop-zone {
         border: 2px dashed #cbd5e1;
@@ -2287,22 +2293,49 @@
     .drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
     .drop-text { font-size: 0.95rem; color: #475569; font-weight: 500; }
 
-    /* Video tab — image/audio input row */
-    .video-img-input-row {
+    /* Video tab — reference slot layout */
+    .video-ref-slot {
+        margin-bottom: 10px;
+    }
+    .video-ref-label {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 4px;
+    }
+    .video-ref-row {
         display: flex;
         gap: 6px;
         align-items: center;
     }
-    .video-img-input-row input {
-        flex: 1;
-        min-width: 0;
+    .video-ref-embedded {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+    }
+    .video-ref-embedded-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .embedded-audio-icon {
+        font-size: 1.5rem;
+        flex-shrink: 0;
     }
     .upload-btn-inline {
+        width: auto;
+        min-height: unset;
         flex-shrink: 0;
         background: #f1f5f9;
         border: 1px solid #cbd5e1;
         border-radius: 6px;
         padding: 6px 10px;
+        font-weight: normal;
         cursor: pointer;
         font-size: 1rem;
         line-height: 1;
@@ -2310,20 +2343,6 @@
     }
     .upload-btn-inline:hover {
         background: #e2e8f0;
-    }
-    .embedded-url-placeholder {
-        flex: 1;
-        padding: 8px 12px;
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        font-size: 0.85rem;
-        color: #64748b;
-        font-style: italic;
-        min-width: 0;
-    }
-    .embedded-thumb-row {
-        margin-top: 6px;
     }
 
     /* Video tab */
@@ -2740,10 +2759,6 @@
         grid-template-columns: 1fr 1fr auto;
         gap: 10px;
         align-items: end;
-    }
-    /* Video reference image/audio slots — single full-width field */
-    .video-ref-fields {
-        grid-template-columns: 1fr;
     }
     .lora-scale-inline input { max-width: 90px; }
     .remove-lora-btn {
