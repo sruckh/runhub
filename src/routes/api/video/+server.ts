@@ -24,6 +24,10 @@ export const POST: RequestHandler = async ({ request }) => {
       input.image_urls = body.image_urls.filter(Boolean);
     }
 
+    if (Array.isArray(body.audio_urls) && body.audio_urls.filter(Boolean).length > 0) {
+      input.audio_urls = body.audio_urls.filter(Boolean);
+    }
+
     if (typeof body.seed === "number" && body.seed >= 0) {
       input.seed = body.seed;
     }
@@ -50,9 +54,19 @@ export const POST: RequestHandler = async ({ request }) => {
       throw new Error(`No request_id in FAL response: ${JSON.stringify(submitData)}`);
     }
 
+    // Use the URLs returned by FAL directly — they include the correct path format
+    const statusUrl =
+      submitData.status_url ||
+      `https://queue.fal.run/${FAL_MODEL}/requests/${requestId}/status`;
+    const responseUrl =
+      submitData.response_url ||
+      `https://queue.fal.run/${FAL_MODEL}/requests/${requestId}/response`;
+
     console.log(`[Video] FAL request submitted: ${requestId}`);
     return json({
       requestId,
+      statusUrl,
+      responseUrl,
       outputDir: body.outputDir || "generations",
       prefix: body.prefix || "video",
     });

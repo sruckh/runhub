@@ -14,6 +14,8 @@ export const POST: RequestHandler = async ({ request }) => {
       falKey: userFalKey,
       outputDir = "generations",
       prefix = "video",
+      statusUrl: providedStatusUrl,
+      responseUrl: providedResponseUrl,
     } = await request.json();
 
     const falKey = (userFalKey as string) || env.FAL_KEY || "";
@@ -21,10 +23,17 @@ export const POST: RequestHandler = async ({ request }) => {
     if (!falKey) return json({ error: "fal.ai API Key is required" }, { status: 400 });
     if (!requestId) return json({ error: "requestId is required" }, { status: 400 });
 
-    const statusRes = await fetch(
-      `https://queue.fal.run/${FAL_MODEL}/requests/${requestId}/status?logs=1`,
-      { headers: { Authorization: `Key ${falKey}` } },
-    );
+    // Use the URLs returned from the submit call; fall back to constructed URLs
+    const statusUrl =
+      providedStatusUrl ||
+      `https://queue.fal.run/${FAL_MODEL}/requests/${requestId}/status`;
+    const responseUrl =
+      providedResponseUrl ||
+      `https://queue.fal.run/${FAL_MODEL}/requests/${requestId}/response`;
+
+    const statusRes = await fetch(`${statusUrl}?logs=1`, {
+      headers: { Authorization: `Key ${falKey}` },
+    });
 
     if (!statusRes.ok) {
       const errorText = await statusRes.text();
@@ -40,22 +49,24 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ status: "PROCESSING" });
     }
 
-    if (status === "FAILED") {
-      return json({ status: "FAILED", error: statusData.error || "Video generation failed" });
+    if (status === "COMPLETED" && statusData.error) {
+      return json({ status: "FAILED", error: statusData.error });
     }
 
     if (status === "COMPLETED") {
-      const resultRes = await fetch(
-        `https://queue.fal.run/${FAL_MODEL}/requests/${requestId}`,
-        { headers: { Authorization: `Key ${falKey}` } },
-      );
+      const resultRes = await fetch(responseUrl, {
+        headers: { Authorization: `Key ${falKey}` },
+      });
 
       if (!resultRes.ok) {
         throw new Error(`FAL result fetch failed: ${resultRes.status}`);
       }
 
       const resultData = await resultRes.json();
-      const videoUrl = resultData?.data?.video?.url ?? resultData?.video?.url;
+      // Result may be wrapped in data or at the top level
+      const videoUrl =
+        resultData?.video?.url ??
+        resultData?.data?.video?.url;
       if (!videoUrl) throw new Error("No video URL in FAL response");
 
       console.log(`[VideoCheck] Downloading video: ${videoUrl}`);

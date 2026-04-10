@@ -154,6 +154,7 @@
     // Create Video states
     let videoPrompt = $state('');
     let videoImageUrls = $state<string[]>(['']);
+    let videoAudioUrls = $state<string[]>(['']);
     let videoResolution = $state('720p');
     let videoDuration = $state('auto');
     let videoAspectRatio = $state('auto');
@@ -161,6 +162,8 @@
     let videoSeed = $state(-1);
     let videoFileInput = $state<HTMLInputElement | null>(null);
     let videoUploadIndex = $state(0);
+    let videoAudioFileInput = $state<HTMLInputElement | null>(null);
+    let videoAudioUploadIndex = $state(0);
 
     // Persist setting changes and queue
     $effect(() => {
@@ -803,6 +806,10 @@
     }
     function removeVideoImageUrl(i: number) {
         if (videoImageUrls.length > 1) videoImageUrls = videoImageUrls.filter((_, idx) => idx !== i);
+        else videoImageUrls = [''];
+    }
+    function clearVideoImageUrl(i: number) {
+        videoImageUrls = videoImageUrls.map((u, idx) => idx === i ? '' : u);
     }
     function openVideoFileUpload(index: number) {
         videoUploadIndex = index;
@@ -823,6 +830,35 @@
         (e.target as HTMLInputElement).value = '';
     }
 
+    function addVideoAudioUrl() {
+        if (videoAudioUrls.length < 3) videoAudioUrls = [...videoAudioUrls, ''];
+    }
+    function removeVideoAudioUrl(i: number) {
+        if (videoAudioUrls.length > 1) videoAudioUrls = videoAudioUrls.filter((_, idx) => idx !== i);
+        else videoAudioUrls = [''];
+    }
+    function clearVideoAudioUrl(i: number) {
+        videoAudioUrls = videoAudioUrls.map((u, idx) => idx === i ? '' : u);
+    }
+    function openVideoAudioUpload(index: number) {
+        videoAudioUploadIndex = index;
+        videoAudioFileInput?.click();
+    }
+    async function handleVideoAudioFileSelect(e: Event) {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        const dataUri = `data:${file.type || 'audio/mpeg'};base64,${base64}`;
+        videoAudioUrls = videoAudioUrls.map((u, idx) => idx === videoAudioUploadIndex ? dataUri : u);
+        (e.target as HTMLInputElement).value = '';
+    }
+
     async function addVideoToQueue() {
         if (!videoPrompt.trim()) {
             error = 'Please enter a prompt for video generation';
@@ -836,6 +872,7 @@
             falKey,
             prompt: videoPrompt.trim(),
             image_urls: videoImageUrls.filter(u => u.trim()),
+            audio_urls: videoGenerateAudio ? videoAudioUrls.filter(u => u.trim()) : [],
             resolution: videoResolution,
             duration: videoDuration,
             aspect_ratio: videoAspectRatio,
@@ -875,13 +912,13 @@
             if (data.error) throw new Error(data.error);
 
             updateResult(resultId, { status: 'PROCESSING', prompt: task.prompt });
-            await pollFalVideoTask(resultId, data.requestId, task);
+            await pollFalVideoTask(resultId, data.requestId, data.statusUrl, data.responseUrl, task);
         } catch (e: any) {
             updateResult(resultId, { status: 'FAILED', error: e.message });
         }
     }
 
-    async function pollFalVideoTask(resultId: string, requestId: string, task: any) {
+    async function pollFalVideoTask(resultId: string, requestId: string, statusUrl: string, responseUrl: string, task: any) {
         const startTime = Date.now();
         let loadingNotified = false;
 
@@ -897,6 +934,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         requestId,
+                        statusUrl,
+                        responseUrl,
                         falKey: task.falKey,
                         outputDir: task.outputDir,
                         prefix: task.prefix
@@ -1694,6 +1733,7 @@
                     ></textarea>
                 </div>
 
+                <!-- Reference Images -->
                 <div class="multi-lora-section">
                     <div class="multi-lora-header">
                         <span class="multi-lora-label">Reference Images (optional, up to 9)</span>
@@ -1701,16 +1741,7 @@
                             <button type="button" class="add-lora-btn" onclick={addVideoImageUrl}>+ Add Image</button>
                         {/if}
                     </div>
-
-                    <!-- Shared hidden file input for all slots -->
-                    <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        bind:this={videoFileInput}
-                        onchange={handleVideoFileSelect}
-                        hidden
-                    />
-
+                    <input type="file" accept="image/jpeg,image/png,image/webp" bind:this={videoFileInput} onchange={handleVideoFileSelect} hidden />
                     {#each videoImageUrls as _imgUrl, i}
                         <div class="lora-entry">
                             <div class="lora-entry-fields">
@@ -1718,26 +1749,22 @@
                                     <label for="videoImg_{i}">
                                         Image {i + 1}
                                         {#if videoImageUrls[i].startsWith('data:')}
-                                            <span class="badge-embedded">embedded</span>
+                                            <span class="badge-embedded">uploaded</span>
                                         {/if}
                                     </label>
+                                    <div class="video-img-input-row">
+                                        {#if videoImageUrls[i].startsWith('data:')}
+                                            <span class="embedded-url-placeholder">Uploaded image</span>
+                                            <button type="button" class="upload-btn-inline" title="Replace with new file" onclick={() => openVideoFileUpload(i)}>📁</button>
+                                            <button type="button" class="upload-btn-inline" title="Clear — switch to URL" onclick={() => clearVideoImageUrl(i)}>✕</button>
+                                        {:else}
+                                            <input type="text" id="videoImg_{i}" bind:value={videoImageUrls[i]} placeholder="https://... or use 📁 to upload (JPEG, PNG, WebP)" />
+                                            <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoFileUpload(i)}>📁</button>
+                                        {/if}
+                                    </div>
                                     {#if videoImageUrls[i].startsWith('data:')}
-                                        <div class="embedded-image-row">
-                                            <img class="embedded-thumb" src={videoImageUrls[i]} alt="Reference {i + 1}" />
-                                            <div class="embedded-actions">
-                                                <span class="field-hint">Embedded — sent as base64</span>
-                                                <button type="button" class="add-lora-btn" onclick={() => openVideoFileUpload(i)}>Replace</button>
-                                            </div>
-                                        </div>
-                                    {:else}
-                                        <div class="video-img-input-row">
-                                            <input
-                                                type="text"
-                                                id="videoImg_{i}"
-                                                bind:value={videoImageUrls[i]}
-                                                placeholder="https://... (JPEG, PNG, WebP)"
-                                            />
-                                            <button type="button" class="upload-btn-inline" onclick={() => openVideoFileUpload(i)} title="Upload from disk">📁</button>
+                                        <div class="embedded-thumb-row">
+                                            <img class="embedded-thumb" src={videoImageUrls[i]} alt="Image {i + 1}" />
                                         </div>
                                     {/if}
                                 </div>
@@ -1784,13 +1811,56 @@
                     </div>
                 </div>
 
-                <div class="field">
-                    <label for="videoGenerateAudio">Generate Audio</label>
-                    <div class="toggle-row">
-                        <input type="checkbox" id="videoGenerateAudio" bind:checked={videoGenerateAudio} />
-                        <span class="toggle-hint-text">Synchronized sound effects, ambient audio &amp; lip-sync</span>
-                    </div>
+                <!-- Generate Audio toggle -->
+                <div class="field toggle-field">
+                    <label for="videoGenerateAudio" class="toggle-label">
+                        <span class="toggle-text">Generate Audio</span>
+                        <input type="checkbox" id="videoGenerateAudio" bind:checked={videoGenerateAudio} class="toggle-checkbox" />
+                        <span class="toggle-slider-ui"></span>
+                    </label>
+                    <p class="toggle-description">Synchronized sound effects, ambient audio &amp; lip-sync in output</p>
                 </div>
+
+                <!-- Reference Audio (visible when generate_audio is on) -->
+                {#if videoGenerateAudio}
+                <div class="multi-lora-section">
+                    <div class="multi-lora-header">
+                        <span class="multi-lora-label">Reference Audio (optional, up to 3)</span>
+                        {#if videoAudioUrls.length < 3}
+                            <button type="button" class="add-lora-btn" onclick={addVideoAudioUrl}>+ Add Audio</button>
+                        {/if}
+                    </div>
+                    <p class="toggle-description" style="margin: 0 0 10px">MP3 or WAV files to guide audio style. Refer in prompt as @Audio1, @Audio2, etc.</p>
+                    <input type="file" accept="audio/mpeg,audio/wav" bind:this={videoAudioFileInput} onchange={handleVideoAudioFileSelect} hidden />
+                    {#each videoAudioUrls as _aUrl, i}
+                        <div class="lora-entry">
+                            <div class="lora-entry-fields">
+                                <div class="field">
+                                    <label for="videoAudio_{i}">
+                                        Audio {i + 1}
+                                        {#if videoAudioUrls[i].startsWith('data:')}
+                                            <span class="badge-embedded">uploaded</span>
+                                        {/if}
+                                    </label>
+                                    <div class="video-img-input-row">
+                                        {#if videoAudioUrls[i].startsWith('data:')}
+                                            <span class="embedded-url-placeholder">Uploaded audio</span>
+                                            <button type="button" class="upload-btn-inline" title="Replace" onclick={() => openVideoAudioUpload(i)}>📁</button>
+                                            <button type="button" class="upload-btn-inline" title="Clear" onclick={() => clearVideoAudioUrl(i)}>✕</button>
+                                        {:else}
+                                            <input type="text" id="videoAudio_{i}" bind:value={videoAudioUrls[i]} placeholder="https://... or use 📁 to upload (MP3, WAV)" />
+                                            <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoAudioUpload(i)}>📁</button>
+                                        {/if}
+                                    </div>
+                                </div>
+                            </div>
+                            {#if videoAudioUrls.length > 1}
+                                <button type="button" class="remove-lora-btn" onclick={() => removeVideoAudioUrl(i)}>×</button>
+                            {/if}
+                        </div>
+                    {/each}
+                </div>
+                {/if}
             {/if}
 
             <div class="grid">
@@ -2217,25 +2287,7 @@
     .drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
     .drop-text { font-size: 0.95rem; color: #475569; font-weight: 500; }
 
-    /* Video tab — generate audio toggle row */
-    .toggle-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 4px;
-    }
-    .toggle-row input[type="checkbox"] {
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-        accent-color: #2563eb;
-        flex-shrink: 0;
-    }
-    .toggle-hint-text {
-        font-size: 0.85rem;
-        color: #475569;
-    }
-    /* Video image URL row with inline upload button */
+    /* Video tab — image/audio input row */
     .video-img-input-row {
         display: flex;
         gap: 6px;
@@ -2259,10 +2311,19 @@
     .upload-btn-inline:hover {
         background: #e2e8f0;
     }
-    .embedded-actions {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+    .embedded-url-placeholder {
+        flex: 1;
+        padding: 8px 12px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        color: #64748b;
+        font-style: italic;
+        min-width: 0;
+    }
+    .embedded-thumb-row {
+        margin-top: 6px;
     }
 
     /* Video tab */
