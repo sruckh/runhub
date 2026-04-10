@@ -159,6 +159,8 @@
     let videoAspectRatio = $state('auto');
     let videoGenerateAudio = $state(true);
     let videoSeed = $state(-1);
+    let videoFileInput = $state<HTMLInputElement | null>(null);
+    let videoUploadIndex = $state(0);
 
     // Persist setting changes and queue
     $effect(() => {
@@ -801,6 +803,24 @@
     }
     function removeVideoImageUrl(i: number) {
         if (videoImageUrls.length > 1) videoImageUrls = videoImageUrls.filter((_, idx) => idx !== i);
+    }
+    function openVideoFileUpload(index: number) {
+        videoUploadIndex = index;
+        videoFileInput?.click();
+    }
+    async function handleVideoFileSelect(e: Event) {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        const dataUri = `data:${file.type || 'image/jpeg'};base64,${base64}`;
+        videoImageUrls = videoImageUrls.map((u, idx) => idx === videoUploadIndex ? dataUri : u);
+        (e.target as HTMLInputElement).value = '';
     }
 
     async function addVideoToQueue() {
@@ -1681,6 +1701,16 @@
                             <button type="button" class="add-lora-btn" onclick={addVideoImageUrl}>+ Add Image</button>
                         {/if}
                     </div>
+
+                    <!-- Shared hidden file input for all slots -->
+                    <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        bind:this={videoFileInput}
+                        onchange={handleVideoFileSelect}
+                        hidden
+                    />
+
                     {#each videoImageUrls as _imgUrl, i}
                         <div class="lora-entry">
                             <div class="lora-entry-fields">
@@ -1694,15 +1724,21 @@
                                     {#if videoImageUrls[i].startsWith('data:')}
                                         <div class="embedded-image-row">
                                             <img class="embedded-thumb" src={videoImageUrls[i]} alt="Reference {i + 1}" />
-                                            <span class="field-hint">Embedded from queue — will be sent as base64</span>
+                                            <div class="embedded-actions">
+                                                <span class="field-hint">Embedded — sent as base64</span>
+                                                <button type="button" class="add-lora-btn" onclick={() => openVideoFileUpload(i)}>Replace</button>
+                                            </div>
                                         </div>
                                     {:else}
-                                        <input
-                                            type="text"
-                                            id="videoImg_{i}"
-                                            bind:value={videoImageUrls[i]}
-                                            placeholder="https://... (JPEG, PNG, WebP — max 30 MB)"
-                                        />
+                                        <div class="video-img-input-row">
+                                            <input
+                                                type="text"
+                                                id="videoImg_{i}"
+                                                bind:value={videoImageUrls[i]}
+                                                placeholder="https://... (JPEG, PNG, WebP)"
+                                            />
+                                            <button type="button" class="upload-btn-inline" onclick={() => openVideoFileUpload(i)} title="Upload from disk">📁</button>
+                                        </div>
                                     {/if}
                                 </div>
                             </div>
@@ -1749,10 +1785,11 @@
                 </div>
 
                 <div class="field">
-                    <label class="checkbox-label">
-                        <input type="checkbox" bind:checked={videoGenerateAudio} />
-                        Generate Audio — synchronized sound effects, ambient audio &amp; lip-sync
-                    </label>
+                    <label for="videoGenerateAudio">Generate Audio</label>
+                    <div class="toggle-row">
+                        <input type="checkbox" id="videoGenerateAudio" bind:checked={videoGenerateAudio} />
+                        <span class="toggle-hint-text">Synchronized sound effects, ambient audio &amp; lip-sync</span>
+                    </div>
                 </div>
             {/if}
 
@@ -2180,6 +2217,54 @@
     .drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
     .drop-text { font-size: 0.95rem; color: #475569; font-weight: 500; }
 
+    /* Video tab — generate audio toggle row */
+    .toggle-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+    }
+    .toggle-row input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #2563eb;
+        flex-shrink: 0;
+    }
+    .toggle-hint-text {
+        font-size: 0.85rem;
+        color: #475569;
+    }
+    /* Video image URL row with inline upload button */
+    .video-img-input-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+    .video-img-input-row input {
+        flex: 1;
+        min-width: 0;
+    }
+    .upload-btn-inline {
+        flex-shrink: 0;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+        transition: background 0.15s;
+    }
+    .upload-btn-inline:hover {
+        background: #e2e8f0;
+    }
+    .embedded-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
     /* Video tab */
     .video-preview {
         width: 100%;
@@ -2216,20 +2301,6 @@
     .field-hint {
         font-size: 0.78rem;
         color: #64748b;
-    }
-    .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        color: #374151;
-    }
-    .checkbox-label input[type="checkbox"] {
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-        accent-color: #2563eb;
     }
 
     .file-list {
