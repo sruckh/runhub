@@ -1744,7 +1744,7 @@
                     <input type="file" accept="image/jpeg,image/png,image/webp" bind:this={videoFileInput} onchange={handleVideoFileSelect} hidden />
                     {#each videoImageUrls as _imgUrl, i}
                         <div class="lora-entry">
-                            <div class="lora-entry-fields">
+                            <div class="lora-entry-fields video-ref-fields">
                                 <div class="field">
                                     <label for="videoImg_{i}">
                                         Image {i + 1}
@@ -1834,7 +1834,7 @@
                     <input type="file" accept="audio/mpeg,audio/wav" bind:this={videoAudioFileInput} onchange={handleVideoAudioFileSelect} hidden />
                     {#each videoAudioUrls as _aUrl, i}
                         <div class="lora-entry">
-                            <div class="lora-entry-fields">
+                            <div class="lora-entry-fields video-ref-fields">
                                 <div class="field">
                                     <label for="videoAudio_{i}">
                                         Audio {i + 1}
@@ -2740,6 +2740,10 @@
         grid-template-columns: 1fr 1fr auto;
         gap: 10px;
         align-items: end;
+    }
+    /* Video reference image/audio slots — single full-width field */
+    .video-ref-fields {
+        grid-template-columns: 1fr;
     }
     .lora-scale-inline input { max-width: 90px; }
     .remove-lora-btn {
