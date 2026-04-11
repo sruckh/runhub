@@ -8,7 +8,8 @@ const MOUNT_PATH = "/mount";
 
 const RUNNINGHUB_WORKFLOWS: Record<string, { appId: string; nodeId: string; label: string }> = {
   "runninghub":        { appId: "2038750666184724482", nodeId: "85", label: "Enhance" },
-  "runninghub-detail": { appId: "2038840598580436994", nodeId: "47", label: "Enhance+Detail" },
+  "runninghub-detail":     { appId: "2038840598580436994", nodeId: "47", label: "Enhance+Detail" },
+  "runninghub-hd-detail":  { appId: "2043051560837586946", nodeId: "110", label: "HD Detailer" },
 };
 
 export const POST: RequestHandler = async ({ request }) => {

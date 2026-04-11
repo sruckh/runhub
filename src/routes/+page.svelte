@@ -1645,7 +1645,7 @@
             {:else if activeTab === 'enhance'}
                 <div class="settings-header">
                     <h2>Enhance Settings</h2>
-                    <span class="settings-badge">{enhanceEngine === 'fal' ? 'fal.ai Phota' : enhanceEngine === 'runninghub' ? 'RunningHub Enhance' : 'RunningHub Enhance+Detail'}</span>
+                    <span class="settings-badge">{enhanceEngine === 'fal' ? 'fal.ai Phota' : enhanceEngine === 'runninghub' ? 'RunningHub Enhance' : enhanceEngine === 'runninghub-detail' ? 'RunningHub Enhance+Detail' : 'RunningHub HD Detailer'}</span>
                 </div>
 
                 <div class="field">
@@ -1654,6 +1654,7 @@
                         <option value="fal">fal.ai Phota — identity-preserving</option>
                         <option value="runninghub">RunningHub — enhance</option>
                         <option value="runninghub-detail">RunningHub — enhance + detail</option>
+                        <option value="runninghub-hd-detail">RunningHub — HD Detailer</option>
                     </select>
                 </div>
 
