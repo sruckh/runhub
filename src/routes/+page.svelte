@@ -28,7 +28,7 @@
 
     // Z-Image / FLUX.2-klein extra params
     let zimageSteps = $state(50);
-    let guidanceScale = $state(3.5);
+    let guidanceScale = $state(4.0);
     let zimageSeed = $state(-1);
     let loraScale = $state(0.85);
     let fluxDevSeed = $state(0);
@@ -39,21 +39,22 @@
     // Z-Image new params
     let zimageNegativePrompt = $state('');
     let zimageMaxSequenceLength = $state(512);
-    let zimageUseBetaSigmas = $state(true);
-    let zimageCfgNormalization = $state(true);
+    let zimageUseBetaSigmas = $state(false);
+    let zimageCfgNormalization = $state(false);
     let zimageCfgTruncation = $state(1.0);
     let zimageVaeTiling = $state<boolean | null>(null); // null = auto
 
     // Z-Image second pass params
-    let secondPassEnabled = $state(false);
+    let secondPassEnabled = $state(true);
     let secondPassUpscale = $state(1.25);
-    let secondPassStrength = $state(0.22);
-    let secondPassGuidanceScale = $state(1.5);
-    let secondPassSteps = $state(10);
-    let secondPassMaxSequenceLength = $state(384);
-    let secondPassCfgNormalization = $state(true);
+    let secondPassStrength = $state(0.30);
+    let secondPassGuidanceScale = $state(4.0);
+    let secondPassSteps = $state(20);
+    let secondPassMaxSequenceLength = $state(512);
+    let secondPassCfgNormalization = $state(false);
     let secondPassCfgTruncation = $state(1.0);
     let secondPassUseBetaSigmas = $state<boolean | null>(null); // null = inherit
+    let secondPassSeed = $state<number | null>(null); // null = inherit from base pass
     let secondPassVaeTiling = $state(false);
     let secondPassVaeSlicing = $state(true);
 
@@ -346,6 +347,7 @@
             second_pass_strength: secondPassStrength,
             second_pass_guidance_scale: secondPassGuidanceScale,
             second_pass_steps: secondPassSteps,
+            second_pass_seed: secondPassSeed,
             second_pass_max_sequence_length: secondPassMaxSequenceLength,
             second_pass_cfg_normalization: secondPassCfgNormalization,
             second_pass_cfg_truncation: secondPassCfgTruncation,
@@ -1515,7 +1517,7 @@
                                     <input type="checkbox" id="zimageCfgNormalization" bind:checked={zimageCfgNormalization} class="toggle-checkbox" />
                                     <span class="toggle-slider-ui"></span>
                                 </label>
-                                <p class="toggle-description">Enabled by default for photorealism</p>
+                                <p class="toggle-description">Disabled by default — recommended for Z-Image to prevent washed-out results</p>
                             </div>
                             <div class="field toggle-field">
                                 <label for="zimageUseBetaSigmas" class="toggle-label">
@@ -1555,6 +1557,18 @@
                                 <div class="field">
                                     <label for="secondPassGuidanceScale">Pass 2 Guidance</label>
                                     <input type="number" id="secondPassGuidanceScale" bind:value={secondPassGuidanceScale} min="1" max="8" step="0.1" />
+                                </div>
+                                <div class="field">
+                                    <label for="secondPassSeed">Pass 2 Seed (null = inherit)</label>
+                                    <input type="number" id="secondPassSeed"
+                                        value={secondPassSeed === null ? '' : secondPassSeed}
+                                        placeholder="Inherit from base pass"
+                                        oninput={(e) => {
+                                            const v = (e.target as HTMLInputElement).value;
+                                            secondPassSeed = v === '' ? null : Number(v);
+                                        }}
+                                        min="0" />
+                                    <p class="field-hint">Leave blank to reuse the base pass seed.</p>
                                 </div>
                                 <div class="field">
                                     <label for="secondPassMaxSequenceLength">Pass 2 Prompt Limit</label>
