@@ -27,11 +27,11 @@ export const POST: RequestHandler = async ({ request }) => {
     // FLUX.2-klein multi-LoRA stack (array of { url, keyword, scale })
     kleinLoras = [],
     // Z-Image / FLUX.2-klein extra params
-    steps = 50,
+    steps = 40,
     guidanceScale = 4.0,
     seed = -1,
     loraScale = 0.9,
-    shift = 3.0,
+    shift = 1.0,
     preset = "realistic_character",
     // Z-Image new params
     zimage_negative_prompt = "",

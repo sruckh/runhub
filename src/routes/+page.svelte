@@ -27,13 +27,13 @@
     let model = $state('flux-dev'); // 'flux-dev' | 'flux-klein' | 'z-image'
 
     // Z-Image / FLUX.2-klein extra params
-    let zimageSteps = $state(50);
+    let zimageSteps = $state(40);
     let guidanceScale = $state(4.0);
     let zimageSeed = $state(-1);
     let loraScale = $state(0.85);
     let fluxDevSeed = $state(0);
     let fluxDevLoraStrength = $state(1);
-    let shift = $state(3.0);
+    let shift = $state(1.0);
     let preset = $state('realistic_character');
 
     // Z-Image new params
@@ -1382,7 +1382,7 @@
                         {#if model === 'z-image'}
                             <div class="field">
                                 <label for="zimageSteps">Inference Steps</label>
-                                <input type="number" id="zimageSteps" bind:value={zimageSteps} min="10" max="50" />
+                                <input type="number" id="zimageSteps" bind:value={zimageSteps} min="10" max="100" />
                             </div>
                             <div class="field">
                                 <label for="guidanceScale">Guidance Scale</label>
@@ -1391,7 +1391,7 @@
                             <div class="field">
                                 <label for="shift">Scheduler Shift</label>
                                 <input type="number" id="shift" bind:value={shift} min="0.5" max="10" step="0.1" />
-                                <p class="field-hint">3.0–3.5 for photorealism. Higher (5–7) favours composition; lower (1–2) favours detail.</p>
+                                <p class="field-hint">1.0 is the official Z-Image default. Higher values (3–7) favour creative composition over photorealism.</p>
                             </div>
                             <div class="field">
                                 <label for="zimageMaxSequenceLength">Prompt Length Limit (tokens)</label>
