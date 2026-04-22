@@ -161,18 +161,18 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 | Parameter                  | Default       | Description                                                                       |
 | -------------------------- | ------------- | --------------------------------------------------------------------------------- |
-| Inference Steps            | `50`          | Number of diffusion steps (10–50). 50 recommended for high realism.               |
-| Guidance Scale             | `4.0`         | CFG scale. 4.0–5.5 recommended for photorealism; higher increases adherence but can over-saturate. |
+| Inference Steps            | `40`          | Number of diffusion steps. The current upstream worker auto-tunes around 40 for Z-Image Base. |
+| Guidance Scale             | `4.5`         | CFG scale. 4.5 is the current photorealism default; higher increases adherence but can over-saturate. |
 | Scheduler Shift            | `3.0`         | FlowMatch scheduler shift. 3.0 is the photorealism sweet spot; 5–7 for creative composition. |
-| CFG Normalization          | off           | Disabled by default — prevents washed-out results per official Z-Image recommendations. |
-| Beta Sigmas                | off           | Disabled by default — optimal FlowMatch noise distribution without beta-sigma scheduling. |
+| CFG Normalization          | on            | Enabled by default in the current Z-Image worker tuning for photorealism. |
+| Beta Sigmas                | off           | Disabled by default in the current worker; can be enabled explicitly if a specific LoRA or endpoint revision needs it. |
 | LoRA Stack                 | 1 empty row   | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale. Select from the curated preset dropdown (populated from `loras-zimage.json`) or enter any URL directly. |
 | Seed                       | `-1` (random) | Fixed seed for reproducibility.                                                   |
 | Enable High-Res Refinement | **on**        | RealPLKSR upscale + Z-Image img2img refinement pass for extra detail. On by default. |
 | ↳ Upscale Factor           | `1.25`        | Scale multiplier for the refinement pass. 1.25× stays within 24 GB with LoRAs loaded. |
-| ↳ Denoising Strength       | `0.30`        | Img2img denoising strength. Lower (0.10–0.20) preserves more pass-1 detail; higher (0.30–0.45) adds refinement. |
-| ↳ Pass 2 Steps             | `20`          | Inference steps for the refinement pass.                                          |
-| ↳ Pass 2 Guidance          | `4.0`         | CFG scale for the refinement pass.                                                |
+| ↳ Denoising Strength       | `0.42`        | Img2img denoising strength. The current upstream worker uses 0.42 to clean the under-denoised base-pass look without changing composition too aggressively. |
+| ↳ Pass 2 Steps             | `28`          | Inference steps for the refinement pass.                                          |
+| ↳ Pass 2 Guidance          | `4.5`         | CFG scale for the refinement pass.                                                |
 | ↳ Pass 2 Prompt Limit      | `512`         | Token limit for the pass-2 prompt encoder.                                        |
 
 #### FLUX.2-klein (RunPod Serverless)

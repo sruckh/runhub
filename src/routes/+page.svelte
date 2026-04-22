@@ -28,30 +28,30 @@
 
     // Z-Image / FLUX.2-klein extra params
     let zimageSteps = $state(40);
-    let guidanceScale = $state(4.0);
+    let guidanceScale = $state(4.5);
     let zimageSeed = $state(-1);
     let loraScale = $state(0.85);
     let fluxDevSeed = $state(0);
     let fluxDevLoraStrength = $state(1);
-    let shift = $state(1.0);
+    let shift = $state(3.0);
     let preset = $state('realistic_character');
 
     // Z-Image new params
     let zimageNegativePrompt = $state('');
     let zimageMaxSequenceLength = $state(512);
     let zimageUseBetaSigmas = $state(false);
-    let zimageCfgNormalization = $state(false);
+    let zimageCfgNormalization = $state(true);
     let zimageCfgTruncation = $state(1.0);
     let zimageVaeTiling = $state<boolean | null>(null); // null = auto
 
     // Z-Image second pass params
     let secondPassEnabled = $state(true);
     let secondPassUpscale = $state(1.25);
-    let secondPassStrength = $state(0.30);
-    let secondPassGuidanceScale = $state(4.0);
-    let secondPassSteps = $state(20);
+    let secondPassStrength = $state(0.42);
+    let secondPassGuidanceScale = $state(4.5);
+    let secondPassSteps = $state(28);
     let secondPassMaxSequenceLength = $state(512);
-    let secondPassCfgNormalization = $state(false);
+    let secondPassCfgNormalization = $state(true);
     let secondPassCfgTruncation = $state(1.0);
     let secondPassUseBetaSigmas = $state<boolean | null>(null); // null = inherit
     let secondPassSeed = $state<number | null>(null); // null = inherit from base pass
@@ -1391,7 +1391,7 @@
                             <div class="field">
                                 <label for="shift">Scheduler Shift</label>
                                 <input type="number" id="shift" bind:value={shift} min="0.5" max="10" step="0.1" />
-                                <p class="field-hint">1.0 is the official Z-Image default. Higher values (3–7) favour creative composition over photorealism.</p>
+                                <p class="field-hint">3.0 is the current Z-Image default for stronger global composition. Lower values preserve finer detail; higher values lean more creative.</p>
                             </div>
                             <div class="field">
                                 <label for="zimageMaxSequenceLength">Prompt Length Limit (tokens)</label>
@@ -1517,7 +1517,7 @@
                                     <input type="checkbox" id="zimageCfgNormalization" bind:checked={zimageCfgNormalization} class="toggle-checkbox" />
                                     <span class="toggle-slider-ui"></span>
                                 </label>
-                                <p class="toggle-description">Disabled by default — recommended for Z-Image to prevent washed-out results</p>
+                                <p class="toggle-description">Enabled by default for the current Z-Image photorealism tuning</p>
                             </div>
                             <div class="field toggle-field">
                                 <label for="zimageUseBetaSigmas" class="toggle-label">
