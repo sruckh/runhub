@@ -165,6 +165,13 @@
     let videoUploadIndex = $state(0);
     let videoAudioFileInput = $state<HTMLInputElement | null>(null);
     let videoAudioUploadIndex = $state(0);
+    const maxVideoImageBytes = 30 * 1024 * 1024;
+    const maxVideoAudioBytes = 15 * 1024 * 1024;
+    const validVideoResolutions = new Set(['480p', '720p', '1080p']);
+    const validVideoDurations = new Set(['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']);
+    const validVideoAspectRatios = new Set(['auto', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16']);
+    const validVideoImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    const validVideoAudioTypes = new Set(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav']);
 
     // Persist setting changes and queue
     $effect(() => {
@@ -820,6 +827,16 @@
     async function handleVideoFileSelect(e: Event) {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
+        if (!validVideoImageTypes.has(file.type)) {
+            error = 'Reference images must be JPEG, PNG, or WebP';
+            (e.target as HTMLInputElement).value = '';
+            return;
+        }
+        if (file.size > maxVideoImageBytes) {
+            error = 'Reference images must be 30 MB or smaller';
+            (e.target as HTMLInputElement).value = '';
+            return;
+        }
         const buffer = await file.arrayBuffer();
         const bytes = new Uint8Array(buffer);
         let binary = '';
@@ -849,6 +866,16 @@
     async function handleVideoAudioFileSelect(e: Event) {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
+        if (!validVideoAudioTypes.has(file.type)) {
+            error = 'Reference audio must be MP3 or WAV';
+            (e.target as HTMLInputElement).value = '';
+            return;
+        }
+        if (file.size > maxVideoAudioBytes) {
+            error = 'Reference audio must be 15 MB or smaller';
+            (e.target as HTMLInputElement).value = '';
+            return;
+        }
         const buffer = await file.arrayBuffer();
         const bytes = new Uint8Array(buffer);
         let binary = '';
@@ -867,14 +894,22 @@
             return;
         }
 
+        const imageUrls = videoImageUrls.map(u => u.trim()).filter(Boolean);
+        const audioUrls = videoGenerateAudio ? videoAudioUrls.map(u => u.trim()).filter(Boolean) : [];
+        const videoValidationError = validateVideoInputs(imageUrls, audioUrls);
+        if (videoValidationError) {
+            error = videoValidationError;
+            return;
+        }
+
         const id = Math.random().toString(36).substring(7);
         const task = {
             type: 'video',
             id,
             falKey,
             prompt: videoPrompt.trim(),
-            image_urls: videoImageUrls.filter(u => u.trim()),
-            audio_urls: videoGenerateAudio ? videoAudioUrls.filter(u => u.trim()) : [],
+            image_urls: imageUrls,
+            audio_urls: audioUrls,
             resolution: videoResolution,
             duration: videoDuration,
             aspect_ratio: videoAspectRatio,
@@ -891,6 +926,52 @@
         if (!isProcessingQueue) {
             processQueue();
         }
+    }
+
+    function validateVideoInputs(imageUrls: string[], audioUrls: string[]) {
+        if (!validVideoResolutions.has(videoResolution)) return 'Resolution must be 480p, 720p, or 1080p';
+        if (!validVideoDurations.has(videoDuration)) return 'Duration must be auto or 4-15 seconds';
+        if (!validVideoAspectRatios.has(videoAspectRatio)) return 'Aspect ratio is not supported by Seedance 2.0';
+        if (imageUrls.length > 9) return 'Seedance supports at most 9 reference images';
+        if (audioUrls.length > 3) return 'Seedance supports at most 3 reference audio files';
+        if (imageUrls.length + audioUrls.length > 12) return 'Seedance supports at most 12 total reference files';
+        if (audioUrls.length > 0 && imageUrls.length === 0) return 'Reference audio requires at least one reference image';
+
+        for (const url of imageUrls) {
+            const message = validateVideoReference(url, validVideoImageTypes, maxVideoImageBytes, 'Reference images');
+            if (message) return message;
+        }
+
+        for (const url of audioUrls) {
+            const message = validateVideoReference(url, validVideoAudioTypes, maxVideoAudioBytes, 'Reference audio');
+            if (message) return message;
+        }
+
+        return '';
+    }
+
+    function validateVideoReference(value: string, allowedTypes: Set<string>, maxBytes: number, label: string) {
+        if (value.startsWith('data:')) {
+            const match = value.match(/^data:([^;,]+);base64,([A-Za-z0-9+/=]+)$/);
+            if (!match) return `${label} uploads must be base64 data URIs`;
+            const mimeType = match[1].toLowerCase();
+            const padding = match[2].endsWith('==') ? 2 : match[2].endsWith('=') ? 1 : 0;
+            const bytes = Math.floor((match[2].length * 3) / 4) - padding;
+            if (!allowedTypes.has(mimeType)) return `${label} contain an unsupported file type`;
+            if (bytes > maxBytes) return `${label} must be ${Math.floor(maxBytes / 1024 / 1024)} MB or smaller`;
+            return '';
+        }
+
+        try {
+            const url = new URL(value);
+            if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+                return `${label} must be public http(s) URLs or uploaded files`;
+            }
+        } catch {
+            return `${label} contains an invalid URL`;
+        }
+
+        return '';
     }
 
     async function startVideo(task: any) {
@@ -1795,6 +1876,7 @@
                         <select id="videoResolution" bind:value={videoResolution}>
                             <option value="480p">480p — Faster</option>
                             <option value="720p">720p — Balanced</option>
+                            <option value="1080p">1080p — Highest quality</option>
                         </select>
                     </div>
                     <div class="field">

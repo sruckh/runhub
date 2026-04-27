@@ -12,14 +12,14 @@
 - **FLUX.2-klein Support** — 9B-parameter undistilled flow-match transformer by Black Forest Labs, with quality presets, multi-LoRA support, optional detail refinement (2nd pass), and server-side upscaling.
 - **Image Upscaling** — Batch upscale images to 2K resolution using specialized RunningHub workflows. Handles intermediary storage via S3 (e.g., Backblaze B2) with automatic presigned URL generation.
 - **Image Enhancement** — Enhance images via the **Enhance** tab using **fal.ai Phota** or two RunningHub workflows (standard Enhance or Enhance+Detail). Accepts image file uploads or URLs. Any generated image in the queue can be sent directly to Enhance.
-- **Video Creation** — Create videos via the **Create Video** tab using **fal.ai Seedance 2.0** (`bytedance/seedance-2.0/reference-to-video`). Supports up to 9 reference images (URL or local upload), up to 3 reference audio files (URL or local upload), resolution, duration, aspect ratio, and audio generation options. FAL jobs are polled asynchronously and videos are saved to the output volume. Any generated image in the queue can be sent directly to the video tab as a reference image.
+- **Video Creation** — Create videos via the **Create Video** tab using **fal.ai Seedance 2.0** (`bytedance/seedance-2.0/reference-to-video`). Supports up to 9 reference images (URL or local upload), up to 3 reference audio files (URL or local upload), 480p/720p/1080p resolution, duration, aspect ratio, and audio generation options. Inputs are validated locally against fal.ai's schema before submit to prevent avoidable 422 errors. FAL jobs are polled asynchronously and videos are saved to the output volume. Any generated image in the queue can be sent directly to the video tab as a reference image.
 - **LSB Steganography (TT-Decoder/Encoder)** — Built-in TypeScript support for both extracting hidden data from generated images and **embedding data into carrier images** for secure upscale processing.
 - **Persistent Sequential Queue** — Bypasses RunningHub's single-task limitation with a robust client-side queue. Captures full form state (LoRA, model, output dir, API keys) per task, survives page refreshes, and processes jobs one-by-one.
 - **Environment-backed API Keys** — API keys can be pre-configured in `.env` and are automatically used as defaults. UI fields override them on a per-session basis.
 - **Modern Tabbed UI** — 4-tab segmented control interface (Generate, Upscale, Enhance, Create Video) with smooth sliding indicators and responsive mobile layout.
 - **300 Curated Locations** — Module-level Fisher-Yates shuffled queue of 300 unique locations ensures zero repetition across large batches.
 - **Flexible Dimensions** — 9 aspect ratio presets for FLUX.1-dev and Z-Image (16px-aligned auto-calculation), plus 12 dedicated aspect ratio presets for FLUX.2-klein (landscape, square, and portrait — all ~1K resolution, 32px-aligned).
-- **Containerized Deployment** — Fully Dockerized with environment-based configuration for secrets and server limits.
+- **Containerized Deployment** — Fully Dockerized with environment-based configuration for secrets and server limits. The app runs inside Docker and is accessed through NPM Proxy Manager on the shared Docker network; no app port is exposed directly to the local host.
 
 ## Architecture
 
@@ -71,10 +71,11 @@ The application runs as a single SvelteKit container. API routes handle server-s
 
 1. User opens the **Create Video** tab and writes a prompt.
 2. Optionally adds up to 9 reference images (paste URL or upload from device) and up to 3 reference audio files (paste URL or upload from device). Any image result in the queue can be sent directly via **Send to Video**.
-3. User configures resolution (480p/720p), duration, aspect ratio, audio generation, and optional seed.
+3. User configures resolution (480p/720p/1080p), duration, aspect ratio, audio generation, and optional seed.
 4. Clicking **Add Video to Queue** submits the task to the queue.
-5. Background processor submits to `POST https://queue.fal.run/bytedance/seedance-2.0/reference-to-video`.
-6. Client polls `/api/video-check` every 5 seconds. When complete, the mp4 is downloaded and saved to the output volume.
+5. The UI and server validate Seedance constraints before fal.ai submit: prompt required, max 9 images, max 3 audio references, max 12 total references, supported file types, supported enum values, and reference audio requiring at least one image reference.
+6. Background processor submits to `POST https://queue.fal.run/bytedance/seedance-2.0/reference-to-video`.
+7. Client polls `/api/video-check` every 5 seconds. When complete, the mp4 is downloaded and saved to the output volume.
 
 ### Upscale Flow
 
@@ -113,6 +114,8 @@ docker network create shared_net 2>/dev/null || true
 # Build and start
 docker compose up -d --build
 ```
+
+The container is intended to be reached through NPM Proxy Manager on the shared Docker network. It does not expose the application port directly to the local host, so use the configured proxy hostname for browser access rather than `localhost:3000`.
 
 ## Configuration
 
@@ -200,14 +203,16 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | ------------------- | ------------- | ------------------------------------------------------------------------------------ |
 | Prompt              | —             | Text description of the video. Reference images as `@Image1`, audio as `@Audio1`.   |
 | Reference Images    | up to 9       | JPEG/PNG/WebP — paste URL or upload from device. Sent as `image_urls[]`.            |
-| Resolution          | `720p`        | `480p` (faster) or `720p` (balanced).                                                |
+| Resolution          | `720p`        | `480p` (faster), `720p` (balanced), or `1080p` (highest quality).                    |
 | Duration            | `auto`        | `auto` or 4–15 seconds.                                                              |
 | Aspect Ratio        | `auto`        | `auto`, `21:9`, `16:9`, `4:3`, `1:1`, `3:4`, `9:16`.                                |
 | Generate Audio      | on            | Synthesize synchronized sound effects, ambient audio, and lip-sync.                  |
-| Reference Audio     | up to 3       | MP3/WAV — paste URL or upload from device (shown when Generate Audio is on).        |
+| Reference Audio     | up to 3       | MP3/WAV — paste URL or upload from device (shown when Generate Audio is on). Reference audio requires at least one reference image. Leaving this empty while Generate Audio is on is valid; Seedance generates audio itself. |
 | Seed                | `-1` (random) | Fixed seed for reproducibility.                                                      |
 | Output Directory    | `generations` | Sub-folder inside `/mount` where the mp4 is saved.                                   |
 | Filename Prefix     | `video`       | Prefix applied to saved mp4 filenames.                                               |
+
+Create Video validation is enforced before fal.ai submission. Reference images must be JPEG/PNG/WebP and no more than 30MB each. Reference audio must be MP3/WAV and no more than 15MB each. fal.ai accepts public `http(s)` URLs or base64 data URIs for file inputs. The Seedance request can include no references at all, image references only, or image plus audio references.
 
 ## API Reference
 
@@ -237,7 +242,7 @@ Handles image enhancement. Accepts multipart form with `engine` (`fal`, `running
 
 ### `POST /api/video`
 
-Submits a video generation job to the fal.ai queue (`bytedance/seedance-2.0/reference-to-video`). Returns `{ requestId, statusUrl, responseUrl, outputDir, prefix }`.
+Submits a video generation job to the fal.ai queue (`bytedance/seedance-2.0/reference-to-video`). Validates prompt, enum values, reference counts, URL/data URI shape, MIME types, uploaded data URI size limits, and the fal.ai rule that reference audio requires an image/video reference. Returns `{ requestId, statusUrl, responseUrl, outputDir, prefix }`.
 
 ### `POST /api/video-check`
 
