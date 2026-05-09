@@ -1,6 +1,7 @@
 import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { env } from "$env/dynamic/private";
+import { uploadAndGetPresignedUrl } from "$lib/s3";
 import fs from "fs/promises";
 import path from "path";
 
@@ -27,14 +28,46 @@ export const POST: RequestHandler = async ({ request }) => {
       const userRhubKey = formData.get("rhubKey") as string;
       const rhubKey = userRhubKey || env.RUNNINGHUB_API_KEY || "";
 
-      if (!imageUrlInput) {
+      if (!imageUrlInput && (!imageFile || imageFile.size === 0)) {
         return json(
-          { error: "An image URL is required for the RunningHub engine" },
+          { error: "Either an image URL or an image file is required for the RunningHub engine" },
           { status: 400 },
         );
       }
 
-      console.log(`[Enhance/${rhubWorkflow.label}] Submitting URL: ${imageUrlInput}`);
+      let imageUrl = imageUrlInput;
+      if (imageFile && imageFile.size > 0) {
+        const s3Endpoint = env.S3_ENDPOINT;
+        const s3AccessKeyId = env.S3_ACCESS_KEY_ID;
+        const s3SecretAccessKey = env.S3_SECRET_ACCESS_KEY;
+        const s3Bucket = env.S3_BUCKET;
+        const s3Region = env.S3_REGION || "us-east-1";
+
+        if (!s3Endpoint || !s3AccessKeyId || !s3SecretAccessKey || !s3Bucket) {
+          return json(
+            { error: "S3 configuration is missing in environment variables" },
+            { status: 500 },
+          );
+        }
+
+        const buffer = Buffer.from(await imageFile.arrayBuffer());
+        const finalFileName = `enhance_${Date.now()}_${imageFile.name}`;
+
+        console.log(`[Enhance/${rhubWorkflow.label}] Uploading ${finalFileName} to S3...`);
+        imageUrl = await uploadAndGetPresignedUrl(
+          {
+            endpoint: s3Endpoint,
+            accessKeyId: s3AccessKeyId,
+            secretAccessKey: s3SecretAccessKey,
+            bucket: s3Bucket,
+            region: s3Region,
+          },
+          buffer,
+          finalFileName,
+        );
+      }
+
+      console.log(`[Enhance/${rhubWorkflow.label}] Submitting URL: ${imageUrl}`);
       const rhubRes = await fetch(
         `https://www.runninghub.ai/openapi/v2/run/ai-app/${rhubWorkflow.appId}`,
         {
@@ -48,7 +81,7 @@ export const POST: RequestHandler = async ({ request }) => {
               {
                 nodeId: rhubWorkflow.nodeId,
                 fieldName: "value",
-                fieldValue: imageUrlInput,
+                fieldValue: imageUrl,
                 description: "URL of Input Image",
               },
             ],

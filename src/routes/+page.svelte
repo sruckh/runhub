@@ -435,20 +435,13 @@
     }
 
     async function addEnhanceToQueue() {
-        if (enhanceEngine !== 'fal') {
-            if (!enhanceImageUrl.trim()) {
-                error = 'Please enter a publicly accessible image URL for the RunningHub engine';
-                return;
-            }
-        } else {
-            if (!enhanceFile && !enhanceImageUrl.trim()) {
-                error = 'Please upload an image or enter an image URL to enhance';
-                return;
-            }
+        if (!enhanceFile && !enhanceImageUrl.trim()) {
+            error = 'Please upload an image or enter an image URL to enhance';
+            return;
         }
 
         const id = Math.random().toString(36).substring(7);
-        if (enhanceFile && enhanceEngine === 'fal') {
+        if (enhanceFile) {
             enhanceFileMap.set(id, enhanceFile);
         }
 
@@ -458,7 +451,7 @@
             engine: enhanceEngine,
             falKey,
             rhubKey,
-            imageUrl: (enhanceFile && enhanceEngine === 'fal') ? '' : enhanceImageUrl.trim(),
+            imageUrl: enhanceFile ? '' : enhanceImageUrl.trim(),
             outputFormat: enhanceOutputFormat,
             outputDir,
             prefix,
@@ -497,7 +490,7 @@
             formData.append('outputFormat', task.outputFormat);
             formData.append('outputDir', task.outputDir);
             formData.append('prefix', task.prefix);
-            if (file && task.engine !== 'runninghub') {
+            if (file) {
                 formData.append('image', file);
             } else {
                 formData.append('imageUrl', task.imageUrl);
@@ -1770,7 +1763,7 @@
                 {/if}
 
                 <div class="field">
-                    <label for="enhanceImageUrl">{enhanceEngine !== 'fal' ? 'Image URL (public, required)' : 'Image URL'}</label>
+                    <label for="enhanceImageUrl">{enhanceEngine !== 'fal' ? 'Image URL (public)' : 'Image URL'}</label>
                     <input
                         type="text"
                         id="enhanceImageUrl"
@@ -1780,7 +1773,6 @@
                     />
                 </div>
 
-                {#if enhanceEngine === 'fal'}
                 <div class="field">
                     <label for="enhanceFileUploadInput">Or Upload Image</label>
                     <div
@@ -1807,7 +1799,6 @@
                         </div>
                     {/if}
                 </div>
-                {/if}
             {:else if activeTab === 'video'}
                 <div class="settings-header">
                     <h2>Create Video</h2>

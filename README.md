@@ -11,7 +11,7 @@
 - **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed prompts via a 2-step process: location selection + AI composition. Each model has a specialized Prompt Director tuned for its strengths.
 - **FLUX.2-klein Support** — 9B-parameter undistilled flow-match transformer by Black Forest Labs, with quality presets, multi-LoRA support, optional detail refinement (2nd pass), and server-side upscaling.
 - **Image Upscaling** — Batch upscale images to 2K resolution using specialized RunningHub workflows. Handles intermediary storage via S3 (e.g., Backblaze B2) with automatic presigned URL generation.
-- **Image Enhancement** — Enhance images via the **Enhance** tab using **fal.ai Phota** or two RunningHub workflows (standard Enhance or Enhance+Detail). Accepts image file uploads or URLs. Any generated image in the queue can be sent directly to Enhance.
+- **Image Enhancement** — Enhance images via the **Enhance** tab using **fal.ai Phota** or three RunningHub workflows (standard Enhance, Enhance+Detail, or HD Detailer). Accepts image file uploads or URLs. RunningHub uploads are temporarily hosted through S3 presigned URLs before workflow submission. Any generated image in the queue can be sent directly to Enhance.
 - **Video Creation** — Create videos via the **Create Video** tab using **fal.ai Seedance 2.0** (`bytedance/seedance-2.0/reference-to-video`). Supports up to 9 reference images (URL or local upload), up to 3 reference audio files (URL or local upload), 480p/720p/1080p resolution, duration, aspect ratio, and audio generation options. Inputs are validated locally against fal.ai's schema before submit to prevent avoidable 422 errors. FAL jobs are polled asynchronously and videos are saved to the output volume. Any generated image in the queue can be sent directly to the video tab as a reference image.
 - **LSB Steganography (TT-Decoder/Encoder)** — Built-in TypeScript support for both extracting hidden data from generated images and **embedding data into carrier images** for secure upscale processing.
 - **Persistent Sequential Queue** — Bypasses RunningHub's single-task limitation with a robust client-side queue. Captures full form state (LoRA, model, output dir, API keys) per task, survives page refreshes, and processes jobs one-by-one.
@@ -62,10 +62,11 @@ The application runs as a single SvelteKit container. API routes handle server-s
 
 ### Enhance Flow
 
-1. User opens the **Enhance** tab and selects an engine: **fal.ai Phota**, **RunningHub Enhance**, or **RunningHub Enhance+Detail**.
+1. User opens the **Enhance** tab and selects an engine: **fal.ai Phota**, **RunningHub Enhance**, **RunningHub Enhance+Detail**, or **RunningHub HD Detailer**.
 2. User provides an image (file upload or URL). Any result in the queue can be sent directly via **Send to Enhance**.
 3. For fal.ai Phota: image is submitted to `fal-ai/phota/enhance` synchronously; result is downloaded and saved.
-4. For RunningHub engines: task is submitted to the respective RunningHub app; client polls `/api/enhance-check` for completion and downloads the result.
+4. For RunningHub engines: uploaded files are first uploaded to S3 and converted to temporary presigned URLs; public URLs are used directly.
+5. The task is submitted to the respective RunningHub app; client polls `/api/check` for completion and downloads the result.
 
 ### Video Creation Flow
 
@@ -95,7 +96,7 @@ The application runs as a single SvelteKit container. API routes handle server-s
 - A [RunningHub API key](https://www.runninghub.ai/) (required for FLUX.1-dev, Upscaling, and RunningHub Enhance)
 - A [RunPod API key](https://www.runpod.io/) (required for Z-Image, FLUX.2-klein, and Qwen prompt provider)
 - A [fal.ai API key](https://fal.ai/) (required for Enhance via Phota and Create Video)
-- **S3-compatible Storage** (Required for Upscaling) — e.g., [Backblaze B2](https://www.backblaze.com/cloud-storage).
+- **S3-compatible Storage** (Required for Upscaling and RunningHub Enhance file uploads) — e.g., [Backblaze B2](https://www.backblaze.com/cloud-storage).
 
 ### Run with Docker (Recommended)
 
@@ -131,11 +132,11 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | `FAL_KEY`                    | For Enhance (Phota) & Create Video              | fal.ai API key                                                      |
 | `RUNPOD_ZIMAGE_ENDPOINT`     | For Z-Image                                     | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
 | `RUNPOD_FLUX_KLEIN_ENDPOINT` | For FLUX.2-klein                                | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
-| `S3_ENDPOINT`                | For Upscaling                                   | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
-| `S3_BUCKET`                  | For Upscaling                                   | Name of the bucket for intermediary image storage                   |
-| `S3_ACCESS_KEY_ID`           | For Upscaling                                   | S3 access key ID                                                    |
-| `S3_SECRET_ACCESS_KEY`       | For Upscaling                                   | S3 secret access key                                                |
-| `S3_REGION`                  | For Upscaling                                   | S3 region (default: `us-east-1`)                                    |
+| `S3_ENDPOINT`                | For Upscaling & RunningHub Enhance uploads      | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
+| `S3_BUCKET`                  | For Upscaling & RunningHub Enhance uploads      | Name of the bucket for intermediary image storage                   |
+| `S3_ACCESS_KEY_ID`           | For Upscaling & RunningHub Enhance uploads      | S3 access key ID                                                    |
+| `S3_SECRET_ACCESS_KEY`       | For Upscaling & RunningHub Enhance uploads      | S3 secret access key                                                |
+| `S3_REGION`                  | For Upscaling & RunningHub Enhance uploads      | S3 region (default: `us-east-1`)                                    |
 | `BODY_SIZE_LIMIT`            | Always                                          | Maximum upload size in bytes (e.g., `52428800` for 50MB)            |
 
 ### Web UI Settings
@@ -238,7 +239,7 @@ Polls RunningHub task status and handles post-processing (image download + optio
 
 ### `POST /api/enhance`
 
-Handles image enhancement. Accepts multipart form with `engine` (`fal`, `runninghub`, `runninghub-detail`), image file or URL. For fal.ai Phota: runs synchronously and returns `{ filename }`. For RunningHub engines: submits task and returns `{ taskId }` for polling.
+Handles image enhancement. Accepts multipart form with `engine` (`fal`, `runninghub`, `runninghub-detail`, `runninghub-hd-detail`), image file or URL. For fal.ai Phota: runs synchronously and returns `{ filename }`. For RunningHub engines: uploads files to S3 for a temporary presigned URL when needed, submits the URL to RunningHub, and returns `{ taskId }` for polling.
 
 ### `POST /api/video`
 
