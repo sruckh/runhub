@@ -132,6 +132,8 @@
     // Load persisted settings
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
     let useTtDecoder = $state(savedTtDecoder);
+    const savedUpscaleEngine = typeof localStorage !== 'undefined' ? localStorage.getItem('upscaleEngine') : null;
+    let upscaleEngine = $state(savedUpscaleEngine || 'runninghub-2k');
     
     let activeTab = $state('generate'); // 'generate' | 'upscale' | 'enhance' | 'video'
     let loading = $state(false);
@@ -177,6 +179,7 @@
     $effect(() => {
         if (typeof localStorage !== 'undefined') {
             localStorage.setItem('useTtDecoder', String(useTtDecoder));
+            localStorage.setItem('upscaleEngine', upscaleEngine);
             localStorage.setItem('rhub_queue', JSON.stringify(queue));
         }
     });
@@ -418,6 +421,7 @@
                 id,
                 rhubKey,
                 useTtDecoder,
+                upscaleEngine,
                 outputDir,
                 prefix,
                 fileName: file.name,
@@ -615,6 +619,7 @@
             formData.append('image', file);
             formData.append('rhubKey', task.rhubKey);
             formData.append('useTtDecoder', String(task.useTtDecoder));
+            formData.append('upscaleEngine', task.upscaleEngine || 'runninghub-2k');
 
             const response = await fetch('/api/upscale', {
                 method: 'POST',
@@ -1691,7 +1696,14 @@
             {:else if activeTab === 'upscale'}
                 <div class="settings-header">
                     <h2>Upscale Settings</h2>
-                    <span class="settings-badge">2K Resolution</span>
+                    <span class="settings-badge">{upscaleEngine === 'runninghub-api' ? 'RunningHub API' : '2K Resolution'}</span>
+                </div>
+                <div class="field">
+                    <label for="upscaleEngine">Upscale Engine</label>
+                    <select id="upscaleEngine" bind:value={upscaleEngine}>
+                        <option value="runninghub-2k">RunningHub — 2K Upscale</option>
+                        <option value="runninghub-api">RunningHub — API Upscale</option>
+                    </select>
                 </div>
                 <div class="field toggle-field">
                     <label for="useTtDecoderUpscale" class="toggle-label">
@@ -1996,7 +2008,7 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'enhance'}ENHANCE{:else if task.type === 'video'}VIDEO{:else if task.type === 'upscale'}UPSCALE{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}FLUX-RH {task.aspectRatio}{/if}
+                                {#if task.type === 'enhance'}ENHANCE{:else if task.type === 'video'}VIDEO{:else if task.type === 'upscale'}{task.upscaleEngine === 'runninghub-api' ? 'UPSCALE API' : 'UPSCALE'}{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}FLUX-RH {task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'enhance'}

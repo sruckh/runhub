@@ -11,6 +11,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const userRhubKey = formData.get("rhubKey") as string;
     const rhubKey = userRhubKey || env.RUNNINGHUB_API_KEY || "";
     const useTtDecoder = formData.get("useTtDecoder") === "true";
+    const upscaleEngine = (formData.get("upscaleEngine") as string) || "runninghub-2k";
 
     // S3 Config from Environment Variables
     const s3Endpoint = env.S3_ENDPOINT;
@@ -33,7 +34,7 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    let buffer = Buffer.from(await image.arrayBuffer());
+    let buffer: Buffer = Buffer.from(await image.arrayBuffer());
     let finalFileName = `upscale_${Date.now()}_${image.name}`;
 
     if (useTtDecoder) {
@@ -59,16 +60,30 @@ export const POST: RequestHandler = async ({ request }) => {
 
     console.log(`[Upscale] Presigned URL generated. Submitting to RunningHub...`);
 
-    const workflowId = useTtDecoder ? "2022423075609907202" : "2022348592370950145";
-    const nodeId = useTtDecoder ? "456" : "112";
+    const workflow =
+      upscaleEngine === "runninghub-api"
+        ? {
+            appId: "2053348161841836033",
+            nodeId: "125",
+            description: "URL of Image",
+            label: "RunningHub API Upscale",
+          }
+        : {
+            appId: useTtDecoder ? "2022423075609907202" : "2022348592370950145",
+            nodeId: useTtDecoder ? "456" : "112",
+            description: "URL of Image to Upscale",
+            label: "RunningHub 2K Upscale",
+          };
+
+    console.log(`[Upscale] Using ${workflow.label} workflow ${workflow.appId}`);
 
     const rhubPayload = {
       nodeInfoList: [
         {
-          nodeId: nodeId,
+          nodeId: workflow.nodeId,
           fieldName: "value",
           fieldValue: imageUrl,
-          description: "URL of Image to Upscale",
+          description: workflow.description,
         },
       ],
       instanceType: "default",
@@ -76,7 +91,7 @@ export const POST: RequestHandler = async ({ request }) => {
     };
 
     const rhubResponse = await fetch(
-      `https://www.runninghub.ai/openapi/v2/run/ai-app/${workflowId}`,
+      `https://www.runninghub.ai/openapi/v2/run/ai-app/${workflow.appId}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${rhubKey}` },

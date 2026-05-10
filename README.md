@@ -1,6 +1,6 @@
 # rhub — RunningHub Precision Control Center
 
-> **Advanced image and video generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation (FLUX.1-dev via RunningHub, Z-Image via RunPod Serverless, and FLUX.2-klein via RunPod Serverless), multi-LoRA additive blending, sequential batch queuing, image upscaling with LSB steganography support, image enhancement via fal.ai Phota and RunningHub workflows, video creation via fal.ai Seedance 2.0, and real-time polling.**
+> **Advanced image and video generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation (FLUX.1-dev via RunningHub, Z-Image via RunPod Serverless, and FLUX.2-klein via RunPod Serverless), multi-LoRA additive blending, sequential batch queuing, selectable RunningHub image upscaling with LSB steganography support, image enhancement via fal.ai Phota and RunningHub workflows, video creation via fal.ai Seedance 2.0, and real-time polling.**
 
 **rhub** is a specialized SvelteKit-based dashboard that transforms simple subject descriptions into high-quality, LoRA-consistent imagery and video. It solves the "repetition problem" in AI generation by bridging expert prompt engineering (Gemini/Qwen) with multiple synthesis pipelines.
 
@@ -10,7 +10,7 @@
 - **Multi-LoRA Blending** — Both **Z-Image** and **FLUX.2-klein** support a dynamic LoRA Stack. Load multiple adapters in parallel with per-LoRA strength control and additive blending. A curated preset dropdown is populated from a build-time config file — pick a style or enter any custom URL.
 - **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed prompts via a 2-step process: location selection + AI composition. Each model has a specialized Prompt Director tuned for its strengths.
 - **FLUX.2-klein Support** — 9B-parameter undistilled flow-match transformer by Black Forest Labs, with quality presets, multi-LoRA support, optional detail refinement (2nd pass), and server-side upscaling.
-- **Image Upscaling** — Batch upscale images to 2K resolution using specialized RunningHub workflows. Handles intermediary storage via S3 (e.g., Backblaze B2) with automatic presigned URL generation.
+- **Image Upscaling** — Batch upscale images using selectable RunningHub workflows: the original 2K Upscale workflow or the RunningHub API Upscale app. Handles intermediary storage via S3 (e.g., Backblaze B2) with automatic presigned URL generation.
 - **Image Enhancement** — Enhance images via the **Enhance** tab using **fal.ai Phota** or three RunningHub workflows (standard Enhance, Enhance+Detail, or HD Detailer). Accepts image file uploads or URLs. RunningHub uploads are temporarily hosted through S3 presigned URLs before workflow submission. Any generated image in the queue can be sent directly to Enhance.
 - **Video Creation** — Create videos via the **Create Video** tab using **fal.ai Seedance 2.0** (`bytedance/seedance-2.0/reference-to-video`). Supports up to 9 reference images (URL or local upload), up to 3 reference audio files (URL or local upload), 480p/720p/1080p resolution, duration, aspect ratio, and audio generation options. Inputs are validated locally against fal.ai's schema before submit to prevent avoidable 422 errors. FAL jobs are polled asynchronously and videos are saved to the output volume. Any generated image in the queue can be sent directly to the video tab as a reference image.
 - **LSB Steganography (TT-Decoder/Encoder)** — Built-in TypeScript support for both extracting hidden data from generated images and **embedding data into carrier images** for secure upscale processing.
@@ -84,7 +84,9 @@ The application runs as a single SvelteKit container. API routes handle server-s
 2. Background processor picks the next upscale task:
    - If **TT-Decoder** toggle is ON: The image is encoded into a new carrier PNG using **TT-Encoder**.
    - The image (original or encoded) is uploaded to S3 storage.
-   - A temporary presigned URL is generated and sent to the RunningHub 2K Upscale workflow.
+   - A temporary presigned URL is generated and sent to the selected RunningHub upscale workflow:
+     - **RunningHub — 2K Upscale** uses the existing 2K workflow, switching to the TT carrier workflow when TT-Decoder is enabled.
+     - **RunningHub — API Upscale** submits to RunningHub app `2053348161841836033` with node `125`.
 3. The client polls status and downloads the upscaled result.
 
 ## Quick Start
@@ -149,7 +151,8 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | **Gemini API Key**     | Overrides `GEMINI_API_KEY` env var for this session                                                          |
 | **RunPod API Key**     | Overrides `RUNPOD_API_KEY` env var for this session                                                          |
 | **fal.ai API Key**     | Overrides `FAL_KEY` env var for this session (used by Enhance and Create Video)                              |
-| **Enable TT-Decoder**  | Toggle LSB steganography decoding/encoding (FLUX.1-dev only, persisted in localStorage)                      |
+| **Upscale Engine**     | Choose **RunningHub — 2K Upscale** or **RunningHub — API Upscale** for tasks added from the Upscale tab       |
+| **Enable TT-Decoder**  | Toggle LSB steganography decoding/encoding for supported RunningHub generation and upscale workflows          |
 
 ### Generation Parameters
 
@@ -231,7 +234,10 @@ Polls a RunPod job (Z-Image or FLUX.2-klein) for completion. When the job comple
 
 ### `POST /api/upscale`
 
-Handles multipart form uploads. Encodes images if requested, uploads to S3, and submits to specialized RunningHub upscaling workflows.
+Handles multipart form uploads. Encodes images if requested, uploads to S3, and submits to the selected RunningHub upscaling workflow. `upscaleEngine` may be `runninghub-2k` or `runninghub-api`.
+
+- `runninghub-2k` submits to the existing 2K workflow (`2022348592370950145`) or the TT carrier workflow (`2022423075609907202`) when `useTtDecoder=true`.
+- `runninghub-api` submits to app `2053348161841836033` with `nodeInfoList[0].nodeId = "125"` and the uploaded image presigned URL as `fieldValue`.
 
 ### `POST /api/check`
 
