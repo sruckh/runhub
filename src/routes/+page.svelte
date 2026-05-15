@@ -157,23 +157,29 @@
     // Create Video states
     let videoPrompt = $state('');
     let videoImageUrls = $state<string[]>(['']);
+    let videoVideoUrls = $state<string[]>(['']);
     let videoAudioUrls = $state<string[]>(['']);
     let videoResolution = $state('720p');
     let videoDuration = $state('auto');
     let videoAspectRatio = $state('auto');
     let videoGenerateAudio = $state(true);
     let videoSeed = $state(-1);
+    let videoEndUserId = $state('');
     let videoFileInput = $state<HTMLInputElement | null>(null);
     let videoUploadIndex = $state(0);
+    let videoVideoFileInput = $state<HTMLInputElement | null>(null);
+    let videoVideoUploadIndex = $state(0);
     let videoAudioFileInput = $state<HTMLInputElement | null>(null);
     let videoAudioUploadIndex = $state(0);
     const maxVideoImageBytes = 30 * 1024 * 1024;
     const maxVideoAudioBytes = 15 * 1024 * 1024;
+    const maxVideoVideoBytes = 50 * 1024 * 1024;
     const validVideoResolutions = new Set(['480p', '720p', '1080p']);
     const validVideoDurations = new Set(['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']);
     const validVideoAspectRatios = new Set(['auto', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16']);
     const validVideoImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
     const validVideoAudioTypes = new Set(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav']);
+    const validVideoVideoTypes = new Set(['video/mp4', 'video/quicktime']);
 
     // Persist setting changes and queue
     $effect(() => {
@@ -822,6 +828,22 @@
         videoUploadIndex = index;
         videoFileInput?.click();
     }
+    async function fileToDataUri(file: File, fallbackType: string) {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        return `data:${file.type || fallbackType};base64,${base64}`;
+    }
+    function dataUriByteLength(value: string) {
+        const match = value.match(/^data:[^;,]+;base64,([A-Za-z0-9+/=]+)$/);
+        if (!match) return 0;
+        const padding = match[1].endsWith('==') ? 2 : match[1].endsWith('=') ? 1 : 0;
+        return Math.floor((match[1].length * 3) / 4) - padding;
+    }
     async function handleVideoFileSelect(e: Event) {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
@@ -835,15 +857,49 @@
             (e.target as HTMLInputElement).value = '';
             return;
         }
-        const buffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
-        const dataUri = `data:${file.type || 'image/jpeg'};base64,${base64}`;
+        const dataUri = await fileToDataUri(file, 'image/jpeg');
         videoImageUrls = videoImageUrls.map((u, idx) => idx === videoUploadIndex ? dataUri : u);
+        (e.target as HTMLInputElement).value = '';
+    }
+
+    function addVideoVideoUrl() {
+        if (videoVideoUrls.length < 3) videoVideoUrls = [...videoVideoUrls, ''];
+    }
+    function removeVideoVideoUrl(i: number) {
+        if (videoVideoUrls.length > 1) videoVideoUrls = videoVideoUrls.filter((_, idx) => idx !== i);
+        else videoVideoUrls = [''];
+    }
+    function clearVideoVideoUrl(i: number) {
+        videoVideoUrls = videoVideoUrls.map((u, idx) => idx === i ? '' : u);
+    }
+    function openVideoVideoUpload(index: number) {
+        videoVideoUploadIndex = index;
+        videoVideoFileInput?.click();
+    }
+    async function handleVideoVideoFileSelect(e: Event) {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        if (!validVideoVideoTypes.has(file.type)) {
+            error = 'Reference videos must be MP4 or MOV';
+            (e.target as HTMLInputElement).value = '';
+            return;
+        }
+        if (file.size > maxVideoVideoBytes) {
+            error = 'Reference video uploads must be 50 MB or smaller';
+            (e.target as HTMLInputElement).value = '';
+            return;
+        }
+        const otherUploadedBytes = videoVideoUrls.reduce((total, url, idx) => {
+            if (idx === videoVideoUploadIndex) return total;
+            return total + dataUriByteLength(url);
+        }, 0);
+        if (otherUploadedBytes + file.size > maxVideoVideoBytes) {
+            error = 'Reference video uploads must be 50 MB or smaller in total';
+            (e.target as HTMLInputElement).value = '';
+            return;
+        }
+        const dataUri = await fileToDataUri(file, 'video/mp4');
+        videoVideoUrls = videoVideoUrls.map((u, idx) => idx === videoVideoUploadIndex ? dataUri : u);
         (e.target as HTMLInputElement).value = '';
     }
 
@@ -874,14 +930,7 @@
             (e.target as HTMLInputElement).value = '';
             return;
         }
-        const buffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
-        const dataUri = `data:${file.type || 'audio/mpeg'};base64,${base64}`;
+        const dataUri = await fileToDataUri(file, 'audio/mpeg');
         videoAudioUrls = videoAudioUrls.map((u, idx) => idx === videoAudioUploadIndex ? dataUri : u);
         (e.target as HTMLInputElement).value = '';
     }
@@ -893,8 +942,9 @@
         }
 
         const imageUrls = videoImageUrls.map(u => u.trim()).filter(Boolean);
+        const videoUrls = videoVideoUrls.map(u => u.trim()).filter(Boolean);
         const audioUrls = videoGenerateAudio ? videoAudioUrls.map(u => u.trim()).filter(Boolean) : [];
-        const videoValidationError = validateVideoInputs(imageUrls, audioUrls);
+        const videoValidationError = validateVideoInputs(imageUrls, videoUrls, audioUrls);
         if (videoValidationError) {
             error = videoValidationError;
             return;
@@ -907,12 +957,14 @@
             falKey,
             prompt: videoPrompt.trim(),
             image_urls: imageUrls,
+            video_urls: videoUrls,
             audio_urls: audioUrls,
             resolution: videoResolution,
             duration: videoDuration,
             aspect_ratio: videoAspectRatio,
             generate_audio: videoGenerateAudio,
             seed: videoSeed,
+            end_user_id: videoEndUserId.trim(),
             outputDir,
             prefix,
             createdAt: new Date().toISOString()
@@ -926,19 +978,28 @@
         }
     }
 
-    function validateVideoInputs(imageUrls: string[], audioUrls: string[]) {
+    function validateVideoInputs(imageUrls: string[], videoUrls: string[], audioUrls: string[]) {
         if (!validVideoResolutions.has(videoResolution)) return 'Resolution must be 480p, 720p, or 1080p';
         if (!validVideoDurations.has(videoDuration)) return 'Duration must be auto or 4-15 seconds';
         if (!validVideoAspectRatios.has(videoAspectRatio)) return 'Aspect ratio is not supported by Seedance 2.0';
         if (imageUrls.length > 9) return 'Seedance supports at most 9 reference images';
+        if (videoUrls.length > 3) return 'Seedance supports at most 3 reference videos';
         if (audioUrls.length > 3) return 'Seedance supports at most 3 reference audio files';
-        if (imageUrls.length + audioUrls.length > 12) return 'Seedance supports at most 12 total reference files';
-        if (audioUrls.length > 0 && imageUrls.length === 0) return 'Reference audio requires at least one reference image';
+        if (imageUrls.length + videoUrls.length + audioUrls.length > 12) return 'Seedance supports at most 12 total reference files';
+        if (audioUrls.length > 0 && imageUrls.length === 0 && videoUrls.length === 0) return 'Reference audio requires at least one reference image or video';
 
         for (const url of imageUrls) {
             const message = validateVideoReference(url, validVideoImageTypes, maxVideoImageBytes, 'Reference images');
             if (message) return message;
         }
+
+        let uploadedVideoBytes = 0;
+        for (const url of videoUrls) {
+            const message = validateVideoReference(url, validVideoVideoTypes, maxVideoVideoBytes, 'Reference videos');
+            if (message) return message;
+            uploadedVideoBytes += dataUriByteLength(url);
+        }
+        if (uploadedVideoBytes > maxVideoVideoBytes) return 'Reference video uploads must be 50 MB or smaller in total';
 
         for (const url of audioUrls) {
             const message = validateVideoReference(url, validVideoAudioTypes, maxVideoAudioBytes, 'Reference audio');
@@ -1828,7 +1889,7 @@
                         id="videoPrompt"
                         bind:value={videoPrompt}
                         rows="3"
-                        placeholder="Describe the video. Reference images in the prompt as @Image1, @Image2, etc."
+                        placeholder="Describe the video. Reference files in the prompt as @Image1, @Video1, @Audio1, etc."
                     ></textarea>
                 </div>
 
@@ -1873,6 +1934,48 @@
                     {/each}
                 </div>
 
+                <!-- Reference Videos -->
+                <div class="multi-lora-section">
+                    <div class="multi-lora-header">
+                        <span class="multi-lora-label">Reference Videos (optional, up to 3)</span>
+                        {#if videoVideoUrls.length < 3}
+                            <button type="button" class="add-lora-btn" onclick={addVideoVideoUrl}>+ Add Video</button>
+                        {/if}
+                    </div>
+                    <p class="toggle-description" style="margin: 0 0 10px">MP4 or MOV clips to guide motion and timing. Combined duration should be 2-15 seconds and uploads must stay under 50 MB total.</p>
+                    <input type="file" accept="video/mp4,video/quicktime,.mov" bind:this={videoVideoFileInput} onchange={handleVideoVideoFileSelect} hidden />
+                    {#each videoVideoUrls as _vidUrl, i}
+                        <div class="video-ref-slot">
+                            <label class="video-ref-label" for="videoRef_{i}">
+                                Video {i + 1}
+                                {#if videoVideoUrls[i].startsWith('data:')}
+                                    <span class="badge-embedded">uploaded</span>
+                                {/if}
+                            </label>
+                            {#if videoVideoUrls[i].startsWith('data:')}
+                                <div class="video-ref-embedded">
+                                    <video class="embedded-video-thumb" src={videoVideoUrls[i]} muted playsinline></video>
+                                    <div class="video-ref-embedded-actions">
+                                        <button type="button" class="add-lora-btn" onclick={() => openVideoVideoUpload(i)}>📁 Replace</button>
+                                        <button type="button" class="add-lora-btn" onclick={() => clearVideoVideoUrl(i)}>✕ Clear</button>
+                                        {#if videoVideoUrls.length > 1}
+                                            <button type="button" class="add-lora-btn" onclick={() => removeVideoVideoUrl(i)}>− Remove slot</button>
+                                        {/if}
+                                    </div>
+                                </div>
+                            {:else}
+                                <div class="video-ref-row">
+                                    <input type="text" id="videoRef_{i}" bind:value={videoVideoUrls[i]} placeholder="Paste URL or use 📁 to upload (MP4, MOV)" style="flex: 1; min-width: 0;" />
+                                    <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoVideoUpload(i)}>📁</button>
+                                    {#if videoVideoUrls.length > 1}
+                                        <button type="button" class="upload-btn-inline" title="Remove" onclick={() => removeVideoVideoUrl(i)}>×</button>
+                                    {/if}
+                                </div>
+                            {/if}
+                        </div>
+                    {/each}
+                </div>
+
                 <div class="grid">
                     <div class="field">
                         <label for="videoResolution">Resolution</label>
@@ -1906,6 +2009,10 @@
                     <div class="field">
                         <label for="videoSeed">Seed (-1 = random)</label>
                         <input type="number" id="videoSeed" bind:value={videoSeed} min="-1" step="1" />
+                    </div>
+                    <div class="field">
+                        <label for="videoEndUserId">End User ID</label>
+                        <input type="text" id="videoEndUserId" bind:value={videoEndUserId} placeholder="Optional fal.ai end user identifier" />
                     </div>
                 </div>
 
@@ -2465,6 +2572,15 @@
         object-fit: cover;
         border-radius: 6px;
         border: 1px solid #e2e8f0;
+        flex-shrink: 0;
+    }
+    .embedded-video-thumb {
+        width: 96px;
+        height: 54px;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        background: #0f172a;
         flex-shrink: 0;
     }
     .badge-embedded {

@@ -59,6 +59,10 @@ function validateReferences(
   return null;
 }
 
+function dataUriBytes(value: string): number | null {
+  return dataUriInfo(value)?.bytes ?? null;
+}
+
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const body = await request.json();
@@ -89,6 +93,11 @@ export const POST: RequestHandler = async ({ request }) => {
       validateReferences("Reference audio", audioUrls, 3, AUDIO_MIME_TYPES, MAX_AUDIO_BYTES);
     if (referenceError) return json({ error: referenceError }, { status: 400 });
 
+    const uploadedVideoBytes = videoUrls.reduce((total, value) => total + (dataUriBytes(value) ?? 0), 0);
+    if (uploadedVideoBytes > MAX_VIDEO_BYTES) {
+      return json({ error: "Reference video uploads must be 50 MB or smaller in total" }, { status: 400 });
+    }
+
     const input: Record<string, unknown> = {
       prompt: body.prompt.trim(),
       resolution,
@@ -103,6 +112,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
     if (Number.isInteger(body.seed) && body.seed >= 0) {
       input.seed = body.seed;
+    }
+
+    if (typeof body.end_user_id === "string" && body.end_user_id.trim()) {
+      input.end_user_id = body.end_user_id.trim();
     }
 
     console.log(`[Video] Submitting to FAL queue: ${FAL_MODEL}`);
