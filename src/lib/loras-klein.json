@@ -14,6 +14,13 @@
     ]
   },
   {
+    "name": "FLUX.2-klein-base-9B_LoRa_by-AI_Characters_CONCEPT_BetterSkin_v1_TRIGGER$real skin$",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/FLUX.2-klein-base-9B_LoRa_by-AI_Characters_CONCEPT_BetterSkin_v1_TRIGGER$real skin$.safetensors",
+    "triggerWords": [
+      "real skin"
+    ]
+  },
+  {
     "name": "FilmGrain_Redmond",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/FilmGrain_Redmond.safetensors",
     "triggerWords": [
@@ -44,6 +51,17 @@
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/K9bD3tailedP0rtraits.safetensors",
     "triggerWords": [
       "D3tailedP0rtraits"
+    ]
+  },
+  {
+    "name": "KM_Sekirei_Musubi",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/KM_Sekirei_Musubi.safetensors",
+    "triggerWords": [
+      "km_sekirei_musubi,",
+      "1girl, solo, voluptuous, long hair, brown hair, low ponytail, ahoge, pink hair ribbon, brown eyes, huge breasts, narrow waist, wide hips,",
+      "base_musubi, white hakui, long sleeves, wide sleeves, ribbon trim, pink sash, red skirt, miniskirt, pleated skirt, red gloves, fingerless gloves, white thighhighs, brown boots, lace-up boots,",
+      "maid_musubi, maid headdress, detached collar, red bowtie, pink dress, short dress, cleavage, short sleeves, puffy sleeves, maid apron, white apron, white wrist cuffs, white thighhighs,",
+      "sports_musubi, white t-shirt, short sleeves, red buruma, bare legs,"
     ]
   },
   {
