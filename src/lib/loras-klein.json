@@ -14,13 +14,6 @@
     ]
   },
   {
-    "name": "FLUX.2-klein-base-9B_LoRa_by-AI_Characters_CONCEPT_BetterSkin_v1_TRIGGER$real skin$",
-    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/FLUX.2-klein-base-9B_LoRa_by-AI_Characters_CONCEPT_BetterSkin_v1_TRIGGER$real skin$.safetensors",
-    "triggerWords": [
-      "real skin"
-    ]
-  },
-  {
     "name": "FilmGrain_Redmond",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/FilmGrain_Redmond.safetensors",
     "triggerWords": [
@@ -54,17 +47,6 @@
     ]
   },
   {
-    "name": "KM_Sekirei_Musubi",
-    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/KM_Sekirei_Musubi.safetensors",
-    "triggerWords": [
-      "km_sekirei_musubi,",
-      "1girl, solo, voluptuous, long hair, brown hair, low ponytail, ahoge, pink hair ribbon, brown eyes, huge breasts, narrow waist, wide hips,",
-      "base_musubi, white hakui, long sleeves, wide sleeves, ribbon trim, pink sash, red skirt, miniskirt, pleated skirt, red gloves, fingerless gloves, white thighhighs, brown boots, lace-up boots,",
-      "maid_musubi, maid headdress, detached collar, red bowtie, pink dress, short dress, cleavage, short sleeves, puffy sleeves, maid apron, white apron, white wrist cuffs, white thighhighs,",
-      "sports_musubi, white t-shirt, short sleeves, red buruma, bare legs,"
-    ]
-  },
-  {
     "name": "Klein-consistency",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/Klein-consistency.safetensors",
     "triggerWords": []
@@ -82,6 +64,11 @@
   {
     "name": "PhotographyStyle",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/PhotographyStyle.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "RealSkin",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/RealSkin.safetensors",
     "triggerWords": []
   },
   {
@@ -124,13 +111,21 @@
     "name": "V1_flux_klein",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/V1_flux_klein.safetensors",
     "triggerWords": [
-      "fluxtrait",
-      "detailed skin"
+      "instapic",
+      "detailed skin",
+      "capture from phone"
     ]
   },
   {
     "name": "V2_flux_klein_4",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/V2_flux_klein_4.safetensors",
+    "triggerWords": [
+      "fluxtrait"
+    ]
+  },
+  {
+    "name": "V3_flux_klein",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/V3_flux_klein.safetensors",
     "triggerWords": [
       "fluxtrait"
     ]
@@ -224,6 +219,14 @@
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/ultra_real_v2.safetensors",
     "triggerWords": [
       "Make this photo high-quality with natural skin texture. Preserve subject's facial features, expression, figure and pose. Preserve overall composition of this photo."
+    ]
+  },
+  {
+    "name": "ultra_real_v4",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/ultra_real_v4.safetensors",
+    "triggerWords": [
+      "High-quality photograph of a.",
+      "Make this photo high-quality."
     ]
   },
   {
