@@ -25,6 +25,7 @@
     let falKey = $state(_fk);
     let promptProvider = $state('gemini');
     let model = $state('flux-dev'); // 'flux-dev' | 'flux-klein' | 'z-image'
+    let apiKeysOpen = $state(!(_gk && _rk)); // open only when keys are missing
 
     // Z-Image / FLUX.2-klein extra params
     let zimageSteps = $state(40);
@@ -113,11 +114,14 @@
     let rhubZimageHeight = $state(1024);
 
     // RunningHub FLUX.2-klein params
-    let rhubKleinLora2Url = $state('');
-    let rhubKleinLora2Keyword = $state('');
-    let rhubKleinLora2Strength = $state(0.85);
+    let rhubKleinWorkflow = $state('standard');
     let rhubKleinAspectRatio = $state('1:1');
     let rhubKleinOrientation = $state('portrait');
+
+    const rhubKleinWorkflows = [
+        { id: 'standard', label: 'Standard' },
+        { id: 'upscale', label: 'Upscale' },
+    ];
 
     // RHUB-Klein aspect ratios (closest to 1K, divisible by 32)
     const rhubKleinAspectRatios = [
@@ -210,12 +214,16 @@
         if (savedQueue) {
             try {
                 queue = JSON.parse(savedQueue);
-                // Auto-start processing if queue is not empty
                 if (queue.length > 0) processQueue();
             } catch (e) {
                 console.error('Failed to parse queue', e);
             }
         }
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && selectedImage) selectedImage = null;
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
     });
 
     const aspectRatios = ['1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4'];
@@ -325,6 +333,11 @@
     }
 
     async function addToQueue() {
+        if (model === 'rhub-klein' && !loraUrl.trim()) {
+            error = 'Character LoRA URL is required for FLUX.2-klein (RH)';
+            return;
+        }
+
         const baseTask = {
             type: 'generate',
             model,
@@ -384,12 +397,8 @@
             rhub_zimage_style: rhubZimageStyle,
             rhub_zimage_width: rhubZimageWidth,
             rhub_zimage_height: rhubZimageHeight,
-            rhub_klein_lora1_url: loraUrl,
-            rhub_klein_lora1_keyword: loraKeyword,
-            rhub_klein_lora1_strength: loraScale,
-            rhub_klein_lora2_url: rhubKleinLora2Url,
-            rhub_klein_lora2_keyword: rhubKleinLora2Keyword,
-            rhub_klein_lora2_strength: rhubKleinLora2Strength,
+            rhub_klein_workflow: rhubKleinWorkflow,
+            rhub_klein_lora1_url: loraUrl.trim(),
             rhub_klein_aspect_ratio: rhubKleinAspectRatio,
             rhub_klein_orientation: rhubKleinOrientation,
             createdAt: new Date().toISOString()
@@ -1210,10 +1219,10 @@
 
 <!-- Modal for Full Screen Image -->
 {#if selectedImage}
-    <div class="modal" onclick={() => selectedImage = null} role="presentation">
+    <div class="modal" onclick={() => selectedImage = null} role="dialog" aria-modal="true" aria-label="Image preview">
         <div class="modal-content" onclick={(e) => e.stopPropagation()} role="presentation">
             <img src={selectedImage} alt="Full screen preview" />
-            <button class="close-modal" onclick={() => selectedImage = null}>&times;</button>
+            <button class="close-modal" onclick={() => selectedImage = null} aria-label="Close preview">&times;</button>
         </div>
     </div>
 {/if}
@@ -1221,45 +1230,54 @@
 <main class="container">
     <header class="hero-banner">
         <div class="hero-copy">
+            <h1>AI Image Magick</h1>
             <span class="hero-kicker">Bring Your Own LoRA</span>
-            <h1>AI Image Magick (Bring your own LoRA)</h1>
-            <p>
-                Prompt, generate, refine, and upscale in one workspace with RunningHub and RunPod-backed image pipelines.
-            </p>
         </div>
         <div class="hero-mark">
-            <div class="hero-mark-frame">
-                <img src={rhubHero} alt="RHUB logo artwork" />
-            </div>
+            <img src={rhubHero} alt="RHUB logo" />
         </div>
     </header>
 
     <div class="card">
         <section class="api-keys">
-            <h2>API Configuration</h2>
-            <div class="grid">
-                <div class="field">
-                    <label for="promptProvider">AI Prompt Provider</label>
-                    <select id="promptProvider" bind:value={promptProvider}>
-                        <option value="gemini">Google Gemini</option>
-                        <option value="runpod">RunPod (Qwen 30B)</option>
-                    </select>
+            <button class="api-keys-toggle" onclick={() => apiKeysOpen = !apiKeysOpen} aria-expanded={apiKeysOpen}>
+                <span class="api-keys-title">
+                    <span>API Configuration</span>
+                    {#if !apiKeysOpen}
+                        <span class="api-keys-summary">
+                            {[rhubKey && 'RunningHub', geminiKey && 'Gemini', runpodKey && 'RunPod'].filter(Boolean).join(' · ') || 'No keys set'}
+                        </span>
+                    {/if}
+                </span>
+                <span class="api-keys-chevron" class:open={apiKeysOpen}>▾</span>
+            </button>
+            {#if apiKeysOpen}
+                <div class="api-keys-body">
+                    <div class="grid">
+                        <div class="field">
+                            <label for="promptProvider">AI Prompt Provider</label>
+                            <select id="promptProvider" bind:value={promptProvider}>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="runpod">RunPod (Qwen 30B)</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="rhubKey">RunningHub API Key</label>
+                            <input type="password" id="rhubKey" bind:value={rhubKey} placeholder="Enter RunningHub Key" />
+                        </div>
+                    </div>
+                    <div class="grid" style="margin-top: 12px;">
+                        <div class="field">
+                            <label for="geminiKey">Gemini API Key</label>
+                            <input type="password" id="geminiKey" bind:value={geminiKey} placeholder="Enter Gemini Key" />
+                        </div>
+                        <div class="field">
+                            <label for="runpodKey">RunPod API Key</label>
+                            <input type="password" id="runpodKey" bind:value={runpodKey} placeholder="Enter RunPod Key" />
+                        </div>
+                    </div>
                 </div>
-                <div class="field">
-                    <label for="rhubKey">RunningHub API Key</label>
-                    <input type="password" id="rhubKey" bind:value={rhubKey} placeholder="Enter RunningHub Key" />
-                </div>
-            </div>
-            <div class="grid" style="margin-top: 12px;">
-                <div class="field">
-                    <label for="geminiKey">Gemini API Key</label>
-                    <input type="password" id="geminiKey" bind:value={geminiKey} placeholder="Enter Gemini Key" />
-                </div>
-                <div class="field">
-                    <label for="runpodKey">RunPod API Key</label>
-                    <input type="password" id="runpodKey" bind:value={runpodKey} placeholder="Enter RunPod Key" />
-                </div>
-            </div>
+            {/if}
         </section>
 
         <div class="tabs-container">
@@ -1293,11 +1311,15 @@
                 <div class="field">
                     <label for="genModel">Generation Model</label>
                     <select id="genModel" bind:value={model}>
-                        <option value="flux-dev">FLUX.1-dev — RunningHub</option>
-                        <option value="flux-klein">FLUX.2-klein — RunPod Serverless</option>
-                        <option value="z-image">Z-Image — RunPod Serverless</option>
-                        <option value="rhub-zimage">ZImage Upscale — RunningHub</option>
-                        <option value="rhub-klein">FLUX.2-klein — RunningHub</option>
+                        <optgroup label="RunPod Serverless">
+                            <option value="flux-klein">FLUX.2-klein (fast)</option>
+                            <option value="z-image">Z-Image (quality)</option>
+                        </optgroup>
+                        <optgroup label="RunningHub">
+                            <option value="rhub-klein">FLUX.2-klein (quality)</option>
+                            <option value="flux-dev">FLUX.1-dev</option>
+                            <option value="rhub-zimage">ZImage Upscale</option>
+                        </optgroup>
                     </select>
                 </div>
 
@@ -1467,18 +1489,23 @@
 
                 {#if model === 'rhub-klein'}
                     <div class="lora-section">
-                        <h4>LoRA Selection</h4>
-                        <div class="grid">
-                            <div class="field">
-                                <label for="rhubKleinLoraName">Select LoRA</label>
-                                <select id="rhubKleinLoraName" bind:value={loraUrl}>
-                                    <option value="K1mScum-flux.2-klein_000003000.safetensors">K1mScum-FK9B</option>
-                                </select>
-                            </div>
-                            <div class="field">
-                                <label for="rhubKleinLoraStrength">LoRA Scale</label>
-                                <input type="number" id="rhubKleinLoraStrength" bind:value={loraScale} min="0" max="2" step="0.05" />
-                            </div>
+                        <h4>Character LoRA</h4>
+                        <div class="field">
+                            <label for="rhubKleinWorkflow">Workflow</label>
+                            <select id="rhubKleinWorkflow" bind:value={rhubKleinWorkflow}>
+                                {#each rhubKleinWorkflows as workflow}
+                                    <option value={workflow.id}>{workflow.label}</option>
+                                {/each}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="rhubKleinLoraUrl">LoRA URL</label>
+                            <input
+                                type="url"
+                                id="rhubKleinLoraUrl"
+                                bind:value={loraUrl}
+                                placeholder="https://huggingface.co/.../model.safetensors"
+                            />
                         </div>
                     </div>
                     <div class="grid">
@@ -1581,19 +1608,25 @@
                             <label for="zimageSeed">Seed (−1 = random)</label>
                             <input type="number" id="zimageSeed" bind:value={zimageSeed} min="-1" />
                         </div>
-                        {#if model === 'flux-klein'}
-                            <div class="field">
-                                <label for="kleinShift">Shift</label>
-                                <input type="number" id="kleinShift" bind:value={kleinShift} min="0.5" max="5" step="0.5" />
-                                <p class="field-hint">1.5 for general photorealism. 2.5 for character LoRAs (better identity preservation). Overrides the preset default.</p>
-                            </div>
-                            <div class="field">
-                                <label for="kleinMaxSequenceLength">Prompt Length Limit (tokens)</label>
-                                <input type="number" id="kleinMaxSequenceLength" bind:value={kleinMaxSequenceLength} min="1" max="512" step="1" />
-                                <p class="field-hint">Maximum prompt tokens read by the model. Extra tokens are truncated.</p>
-                            </div>
-                        {/if}
                     </div>
+
+                    {#if model === 'flux-klein'}
+                        <details class="advanced-panel">
+                            <summary>Advanced parameters</summary>
+                            <div class="grid" style="margin-top: 8px;">
+                                <div class="field">
+                                    <label for="kleinShift">Shift</label>
+                                    <input type="number" id="kleinShift" bind:value={kleinShift} min="0.5" max="5" step="0.5" />
+                                    <p class="field-hint">1.5 for general photorealism. 2.5 for character LoRAs (better identity preservation). Overrides the preset default.</p>
+                                </div>
+                                <div class="field">
+                                    <label for="kleinMaxSequenceLength">Prompt Length Limit (tokens)</label>
+                                    <input type="number" id="kleinMaxSequenceLength" bind:value={kleinMaxSequenceLength} min="1" max="512" step="1" />
+                                    <p class="field-hint">Maximum prompt tokens read by the model. Extra tokens are truncated.</p>
+                                </div>
+                            </div>
+                        </details>
+                    {/if}
 
                     {#if model === 'flux-klein'}
                         <!-- Detail Refinement (2nd Pass) -->
@@ -1650,24 +1683,27 @@
                             <input type="text" id="zimageNegativePrompt" bind:value={zimageNegativePrompt} placeholder="Leave blank for photorealism default" />
                             <p class="field-hint">Leave blank to use the built-in photorealism negative. Pass an empty string (&quot;&quot;) to disable.</p>
                         </div>
-                        <div class="grid" style="margin-top: 4px;">
-                            <div class="field toggle-field">
-                                <label for="zimageCfgNormalization" class="toggle-label">
-                                    <span class="toggle-text">CFG Normalization</span>
-                                    <input type="checkbox" id="zimageCfgNormalization" bind:checked={zimageCfgNormalization} class="toggle-checkbox" />
-                                    <span class="toggle-slider-ui"></span>
-                                </label>
-                                <p class="toggle-description">Enabled by default for the current Z-Image photorealism tuning</p>
+                        <details class="advanced-panel">
+                            <summary>Scheduler options</summary>
+                            <div class="grid" style="margin-top: 8px;">
+                                <div class="field toggle-field">
+                                    <label for="zimageCfgNormalization" class="toggle-label">
+                                        <span class="toggle-text">CFG Normalization</span>
+                                        <input type="checkbox" id="zimageCfgNormalization" bind:checked={zimageCfgNormalization} class="toggle-checkbox" />
+                                        <span class="toggle-slider-ui"></span>
+                                    </label>
+                                    <p class="toggle-description">Enabled by default for the current Z-Image photorealism tuning</p>
+                                </div>
+                                <div class="field toggle-field">
+                                    <label for="zimageUseBetaSigmas" class="toggle-label">
+                                        <span class="toggle-text">Beta Sigmas</span>
+                                        <input type="checkbox" id="zimageUseBetaSigmas" bind:checked={zimageUseBetaSigmas} class="toggle-checkbox" />
+                                        <span class="toggle-slider-ui"></span>
+                                    </label>
+                                    <p class="toggle-description">FlowMatch beta-sigma scheduling</p>
+                                </div>
                             </div>
-                            <div class="field toggle-field">
-                                <label for="zimageUseBetaSigmas" class="toggle-label">
-                                    <span class="toggle-text">Beta Sigmas</span>
-                                    <input type="checkbox" id="zimageUseBetaSigmas" bind:checked={zimageUseBetaSigmas} class="toggle-checkbox" />
-                                    <span class="toggle-slider-ui"></span>
-                                </label>
-                                <p class="toggle-description">FlowMatch beta-sigma scheduling</p>
-                            </div>
-                        </div>
+                        </details>
 
                         <!-- Second Pass Options -->
                         <div class="field toggle-field" style="margin-top: 12px;">
@@ -1680,6 +1716,8 @@
                         </div>
 
                         {#if secondPassEnabled}
+                            <details class="advanced-panel" open>
+                            <summary>Refinement parameters</summary>
                             <div class="grid second-pass-params">
                                 <div class="field">
                                     <label for="secondPassUpscale">Upscale Factor</label>
@@ -1751,6 +1789,7 @@
                                     </label>
                                 </div>
                             </div>
+                            </details>
                         {/if}
                     {/if}
                 {/if}
@@ -2115,7 +2154,7 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'enhance'}ENHANCE{:else if task.type === 'video'}VIDEO{:else if task.type === 'upscale'}{task.upscaleEngine === 'runninghub-api' ? 'UPSCALE API' : 'UPSCALE'}{:else if task.model === 'flux-klein'}KLEIN {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-IMG {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZIM-RH {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}KLEIN-RH {task.rhub_klein_aspect_ratio}{task.rhub_klein_orientation === 'landscape' ? 'L' : 'P'}{:else}FLUX-RH {task.aspectRatio}{/if}
+                                {#if task.type === 'enhance'}Enhance{:else if task.type === 'video'}Video{:else if task.type === 'upscale'}{task.upscaleEngine === 'runninghub-api' ? 'Upscale (API)' : 'Upscale 2K'}{:else if task.model === 'flux-klein'}Klein · {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-Image · {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZImage · {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}Klein (RH {task.rhub_klein_workflow === 'upscale' ? 'Upscale' : 'Standard'}) · {task.rhub_klein_aspect_ratio} {task.rhub_klein_orientation === 'landscape' ? 'Landscape' : 'Portrait'}{:else}FLUX.1-dev · {task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'enhance'}
@@ -2135,6 +2174,12 @@
                     </div>
                 {/each}
             </div>
+        </section>
+    {/if}
+
+    {#if results.length === 0 && !loading}
+        <section class="results results-empty">
+            <p class="empty-state-text">Generated images will appear here</p>
         </section>
     {/if}
 
@@ -2191,52 +2236,21 @@
                                     <p class="error-text">{res.error}</p>
                                 {/if}
                                 <div class="result-actions">
-                                    <button
-                                        class="result-action-btn"
-                                        onclick={() => openFullScreen(fileUrl)}
-                                        disabled={!isImageResult}
-                                    >
-                                        Full Screen
-                                    </button>
+                                    {#if isImageResult}
+                                        <button class="result-action-btn" onclick={() => openFullScreen(fileUrl)}>Full Screen</button>
+                                    {/if}
                                     {#if hasFile}
                                         <a class="result-action-btn" href={fileUrl} download={res.filename}>{isVideoResult ? 'Save Video' : 'Save Image'}</a>
-                                    {:else}
-                                        <span class="result-action-btn disabled-link">Save</span>
                                     {/if}
-                                    <button
-                                        class="result-action-btn"
-                                        onclick={() => copyPrompt(res.prompt || '')}
-                                        disabled={!res.prompt}
-                                    >
-                                        Copy Prompt
-                                    </button>
-                                    <button
-                                        class="result-action-btn"
-                                        onclick={() => sendToUpscale(res)}
-                                        disabled={!isImageResult}
-                                    >
-                                        Send to Upscale
-                                    </button>
-                                    <button
-                                        class="result-action-btn"
-                                        onclick={() => sendToEnhance(res)}
-                                        disabled={!isImageResult}
-                                    >
-                                        Send to Enhance
-                                    </button>
-                                    <button
-                                        class="result-action-btn"
-                                        onclick={() => sendToVideo(res)}
-                                        disabled={!isImageResult}
-                                    >
-                                        Send to Video
-                                    </button>
-                                    <button
-                                        class="result-action-btn danger"
-                                        onclick={() => deleteResult(res)}
-                                    >
-                                        Delete
-                                    </button>
+                                    {#if res.prompt}
+                                        <button class="result-action-btn" onclick={() => copyPrompt(res.prompt || '')}>Copy Prompt</button>
+                                    {/if}
+                                    {#if isImageResult}
+                                        <button class="result-action-btn" onclick={() => sendToUpscale(res)}>Send to Upscale</button>
+                                        <button class="result-action-btn" onclick={() => sendToEnhance(res)}>Send to Enhance</button>
+                                        <button class="result-action-btn" onclick={() => sendToVideo(res)}>Send to Video</button>
+                                    {/if}
+                                    <button class="result-action-btn danger" onclick={() => deleteResult(res)}>Delete</button>
                                 </div>
                             </div>
                         </div>
@@ -2275,98 +2289,58 @@
     }
 
     .hero-banner {
-        position: relative;
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 24px;
+        display: flex;
         align-items: center;
-        margin-bottom: 24px;
-        padding: 28px 24px;
-        border-radius: 28px;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+        padding: 14px 20px;
+        border-radius: 16px;
         overflow: hidden;
         background:
-            radial-gradient(circle at 15% 20%, rgba(96, 165, 250, 0.24), transparent 22%),
-            radial-gradient(circle at 80% 25%, rgba(45, 212, 191, 0.18), transparent 20%),
-            linear-gradient(135deg, rgba(11, 18, 32, 0.86) 0%, #162338 50%, #0f172a 100%);
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        box-shadow:
-            0 30px 60px rgba(15, 23, 42, 0.22),
-            inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    }
-    .hero-banner::after {
-        content: '';
-        position: absolute;
-        inset: auto -10% -32% auto;
-        width: 280px;
-        height: 280px;
-        background: radial-gradient(circle, rgba(96, 165, 250, 0.35) 0%, transparent 70%);
-        pointer-events: none;
+            radial-gradient(circle at 15% 50%, rgba(96, 165, 250, 0.2), transparent 40%),
+            linear-gradient(135deg, rgba(11, 18, 32, 0.9) 0%, #0f172a 100%);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
     }
     .hero-copy {
-        position: relative;
-        z-index: 1;
         display: flex;
-        flex-direction: column;
-        gap: 14px;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
     }
     .hero-kicker {
-        width: fit-content;
-        padding: 7px 12px;
+        padding: 3px 10px;
         border-radius: 999px;
         background: rgba(148, 163, 184, 0.14);
         border: 1px solid rgba(191, 219, 254, 0.28);
-        color: #bfdbfe;
-        font-size: 0.74rem;
+        color: #93c5fd;
+        font-size: 0.7rem;
         font-weight: 700;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
+        white-space: nowrap;
     }
     .hero-banner h1 {
         margin: 0;
         color: #f8fafc;
-        font-size: clamp(2rem, 5vw, 3.6rem);
-        line-height: 1.02;
-        max-width: 12ch;
-    }
-    .hero-banner p {
-        margin: 0;
-        max-width: 52ch;
-        color: #e2e8f0;
-        font-size: 1rem;
-        line-height: 1.6;
+        font-size: 1.35rem;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
     }
     .hero-mark {
-        position: relative;
-        z-index: 1;
+        flex-shrink: 0;
         display: flex;
-        justify-content: center;
+        align-items: center;
     }
-    .hero-mark-frame {
-        width: min(100%, 440px);
-        padding: 18px;
-        border-radius: 24px;
-        background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04)),
-            rgba(15, 23, 42, 0.38);
-        border: 1px solid rgba(191, 219, 254, 0.2);
-        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
-        backdrop-filter: blur(8px);
-    }
-    .hero-mark-frame img {
+    .hero-mark img {
         display: block;
-        width: 100%;
-        height: auto;
+        width: 48px;
+        height: 48px;
         object-fit: contain;
-        filter: drop-shadow(0 20px 32px rgba(15, 23, 42, 0.45));
-    }
-
-    @media (min-width: 900px) {
-        .hero-banner {
-            grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.9fr);
-            gap: 32px;
-            margin-bottom: 40px;
-            padding: 40px;
-        }
+        filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.4));
+        opacity: 0.9;
     }
 
     .card, .results {
@@ -2383,7 +2357,90 @@
         .card, .results { padding: 32px; }
     }
 
-    h2 { font-size: 1rem; margin: 0 0 16px 0; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; }
+    /* Collapsible API keys */
+    .api-keys-toggle {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-align: left;
+        margin-bottom: 0;
+        min-height: auto;
+    }
+    .api-keys-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .api-keys-summary {
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: #64748b;
+    }
+    .api-keys-chevron {
+        font-size: 1.1rem;
+        color: #94a3b8;
+        transition: transform 0.2s ease;
+        flex-shrink: 0;
+    }
+    .api-keys-chevron.open { transform: rotate(180deg); }
+    .api-keys-body { margin-top: 16px; padding-top: 16px; border-top: 1px solid #f1f5f9; }
+    .api-keys { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #f1f5f9; }
+
+    /* Empty results state */
+    .results-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 80px;
+        background: #f8fafc;
+        border-style: dashed;
+    }
+    .empty-state-text {
+        margin: 0;
+        font-size: 0.875rem;
+        color: #94a3b8;
+    }
+
+    /* Advanced panel (progressive disclosure) */
+    .advanced-panel {
+        margin-top: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 0;
+        overflow: hidden;
+    }
+    .advanced-panel > summary {
+        cursor: pointer;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #64748b;
+        padding: 8px 12px;
+        list-style: none;
+        user-select: none;
+        background: #f8fafc;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .advanced-panel > summary::before {
+        content: '▸';
+        font-size: 0.65rem;
+        transition: transform 0.15s ease;
+    }
+    .advanced-panel[open] > summary::before { transform: rotate(90deg); }
+    .advanced-panel > summary::-webkit-details-marker { display: none; }
+    .advanced-panel > *:not(summary) { padding: 12px; }
+
+    h2 { font-size: 1.125rem; font-weight: 700; color: #0f172a; margin: 0 0 16px 0; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; }
     
     .settings-header {
         display: flex;
@@ -2475,8 +2532,8 @@
     .tab-icon { font-size: 1rem; }
 
     @media (max-width: 520px) {
-        .tab-btn { padding: 8px 6px; font-size: 0.72rem; gap: 4px; }
-        .tab-icon { display: none; }
+        .tab-btn { padding: 10px 4px; font-size: 0; gap: 0; }
+        .tab-icon { display: inline; font-size: 1.25rem; }
     }
 
     /* Drop Zone Styles */
@@ -2867,7 +2924,7 @@
     }
 
     /* Queue Styles */
-    .queue-section { border-left: 4px solid #2563eb; }
+    .queue-section { background: #eff6ff; border-color: #bfdbfe; }
     .queue-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
     .queue-item { 
         display: flex; 

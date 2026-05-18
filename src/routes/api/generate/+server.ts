@@ -69,12 +69,8 @@ export const POST: RequestHandler = async ({ request }) => {
     rhub_zimage_width = 896,
     rhub_zimage_height = 1120,
     // RunningHub FLUX.2-klein params
+    rhub_klein_workflow = "standard",
     rhub_klein_lora1_url = "",
-    rhub_klein_lora1_keyword = "",
-    rhub_klein_lora1_strength = 0,
-    rhub_klein_lora2_url = "",
-    rhub_klein_lora2_keyword = "",
-    rhub_klein_lora2_strength = 0,
     rhub_klein_aspect_ratio = "1:1",
     rhub_klein_orientation = "portrait",
   } = await request.json();
@@ -602,56 +598,62 @@ RULES:
       const rhub_klein_width = rhub_klein_orientation === "landscape" ? baseDims.height : baseDims.width;
       const rhub_klein_height = rhub_klein_orientation === "landscape" ? baseDims.width : baseDims.height;
 
-      // New workflow expects loraUrl to be the filename like "K1mScum-flux.2-klein_000003000.safetensors"
-      const selectedLora = rhub_klein_lora1_url || "K1mScum-flux.2-klein_000003000.safetensors";
-      const loraStrength = (rhub_klein_lora1_strength || 1).toString();
+      const selectedLora =
+        typeof rhub_klein_lora1_url === "string" ? rhub_klein_lora1_url.trim() : "";
+      if (!selectedLora) {
+        return json({ error: "Character LoRA URL is required for FLUX.2-klein (RH)" }, { status: 400 });
+      }
 
       console.log(
         `[RHUB-Klein] Submitting ${rhub_klein_aspect_ratio} ${rhub_klein_orientation} = ${rhub_klein_width}x${rhub_klein_height}`,
       );
-      console.log(`[RHUB-Klein] LoRA: ${selectedLora} (strength ${loraStrength})`);
+      console.log(`[RHUB-Klein] Character LoRA URL: ${selectedLora}`);
       console.log(`[RHUB-Klein] Prompt (first 80): ${finalPrompt.substring(0, 80)}`);
 
+      const isUpscaleWorkflow = rhub_klein_workflow === "upscale";
+      const rhubKleinAppId = isUpscaleWorkflow
+        ? "2029780093899378690"
+        : "2036237857823662082";
+      const rhubKleinDimensionNodes = isUpscaleWorkflow
+        ? [
+            {
+              nodeId: "205",
+              fieldName: "height",
+              fieldValue: rhub_klein_height.toString(),
+              description: "Height before Upscale",
+            },
+            {
+              nodeId: "205",
+              fieldName: "width",
+              fieldValue: rhub_klein_width.toString(),
+              description: "Width before Upscale",
+            },
+          ]
+        : [
+            {
+              nodeId: "98",
+              fieldName: "value",
+              fieldValue: rhub_klein_width.toString(),
+              description: "Width",
+            },
+            {
+              nodeId: "99",
+              fieldName: "value",
+              fieldValue: rhub_klein_height.toString(),
+              description: "Height",
+            },
+          ];
       const rhubKleinPayload = {
         nodeInfoList: [
           {
-            nodeId: "98",
+            nodeId: isUpscaleWorkflow ? "447" : "129",
             fieldName: "value",
-            fieldValue: rhub_klein_width.toString(),
-            description: "Width",
-          },
-          {
-            nodeId: "99",
-            fieldName: "value",
-            fieldValue: rhub_klein_height.toString(),
-            description: "Height",
-          },
-          {
-            nodeId: "120",
-            fieldName: "lora_name",
             fieldValue: selectedLora,
-            description: "Use Same LoRA 01",
+            description: "URL of Character LoRA",
           },
+          ...rhubKleinDimensionNodes,
           {
-            nodeId: "120",
-            fieldName: "strength_clip",
-            fieldValue: loraStrength,
-            description: "LoRA 01 strength",
-          },
-          {
-            nodeId: "122",
-            fieldName: "lora_name",
-            fieldValue: selectedLora,
-            description: "Use Same LoRA 02",
-          },
-          {
-            nodeId: "122",
-            fieldName: "strength_model",
-            fieldValue: loraStrength,
-            description: "LoRA 02 strength",
-          },
-          {
-            nodeId: "6",
+            nodeId: isUpscaleWorkflow ? "396" : "6",
             fieldName: "text",
             fieldValue: finalPrompt,
             description: "Prompt",
@@ -662,7 +664,7 @@ RULES:
       };
 
       const rhubKleinResponse = await fetch(
-        "https://www.runninghub.ai/openapi/v2/run/ai-app/2036237857823662082",
+        `https://www.runninghub.ai/openapi/v2/run/ai-app/${rhubKleinAppId}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${rhubKey}` },
