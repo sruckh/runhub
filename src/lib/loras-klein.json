@@ -87,6 +87,13 @@
     "triggerWords": []
   },
   {
+    "name": "SmartphoneSnapshotPhotoReality_v13",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/SmartphoneSnapshotPhotoReality_v13.safetensors",
+    "triggerWords": [
+      "casual snapshot"
+    ]
+  },
+  {
     "name": "SnapchatSelfie_Redmond",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/SnapchatSelfie_Redmond.safetensors",
     "triggerWords": [
@@ -174,6 +181,11 @@
   {
     "name": "klein_slider_anatomy",
     "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/klein_slider_anatomy.safetensors",
+    "triggerWords": []
+  },
+  {
+    "name": "klein_snofs_v1_4",
+    "url": "https://filez.gemneye.xyz/LoRA/Civitai/flux.2-klein-9b/klein_snofs_v1_4.safetensors",
     "triggerWords": []
   },
   {
