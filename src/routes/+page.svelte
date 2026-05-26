@@ -87,7 +87,7 @@
     }
 
     // Reset LoRA stack when switching between models with different LoRA lists
-    let _prevLoraModel = model;
+    let _prevLoraModel = untrack(() => model);
     $effect(() => {
         const m = model;
         if ((m === 'flux-klein' || m === 'z-image') && m !== _prevLoraModel) {
@@ -97,7 +97,7 @@
     });
 
     // Sync kleinShift with preset default when preset changes
-    let _prevPreset = preset;
+    let _prevPreset = untrack(() => preset);
     $effect(() => {
         const p = preset;
         if (p !== _prevPreset) {
@@ -1217,9 +1217,53 @@
     />
 </svelte:head>
 
+<svg class="icon-sprite" aria-hidden="true" focusable="false">
+    <symbol id="icon-generate" viewBox="0 0 24 24">
+        <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
+        <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
+    </symbol>
+    <symbol id="icon-upscale" viewBox="0 0 24 24">
+        <path d="M7 17L17 7" />
+        <path d="M10 7h7v7" />
+        <path d="M5 11V5h6" />
+        <path d="M13 19h6v-6" />
+    </symbol>
+    <symbol id="icon-enhance" viewBox="0 0 24 24">
+        <path d="M4 20L20 4" />
+        <path d="M15 4l5 5" />
+        <path d="M5 6l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2z" />
+    </symbol>
+    <symbol id="icon-video" viewBox="0 0 24 24">
+        <path d="M4 6h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4z" />
+        <path d="M17 10l4-2v8l-4-2" />
+    </symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24">
+        <path d="M12 16V4" />
+        <path d="M7 9l5-5 5 5" />
+        <path d="M5 16v3h14v-3" />
+    </symbol>
+    <symbol id="icon-file" viewBox="0 0 24 24">
+        <path d="M7 3h7l5 5v13H7z" />
+        <path d="M14 3v5h5" />
+    </symbol>
+    <symbol id="icon-audio" viewBox="0 0 24 24">
+        <path d="M9 18V6l10-2v12" />
+        <path d="M9 18a3 3 0 1 1-2-2.8" />
+        <path d="M19 16a3 3 0 1 1-2-2.8" />
+    </symbol>
+</svg>
+
 <!-- Modal for Full Screen Image -->
 {#if selectedImage}
-    <div class="modal" onclick={() => selectedImage = null} role="dialog" aria-modal="true" aria-label="Image preview">
+    <div
+        class="modal"
+        onclick={() => selectedImage = null}
+        onkeydown={(e) => e.key === 'Escape' && (selectedImage = null)}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Image preview"
+        tabindex="0"
+    >
         <div class="modal-content" onclick={(e) => e.stopPropagation()} role="presentation">
             <img src={selectedImage} alt="Full screen preview" />
             <button class="close-modal" onclick={() => selectedImage = null} aria-label="Close preview">&times;</button>
@@ -1283,16 +1327,16 @@
         <div class="tabs-container">
             <div class="tabs">
                 <button class="tab-btn {activeTab === 'generate' ? 'active' : ''}" onclick={() => activeTab = 'generate'}>
-                    <span class="tab-icon">✨</span> Generate
+                    <svg class="ui-icon tab-icon" aria-hidden="true"><use href="#icon-generate" /></svg> Generate
                 </button>
                 <button class="tab-btn {activeTab === 'upscale' ? 'active' : ''}" onclick={() => activeTab = 'upscale'}>
-                    <span class="tab-icon">🚀</span> Upscale
+                    <svg class="ui-icon tab-icon" aria-hidden="true"><use href="#icon-upscale" /></svg> Upscale
                 </button>
                 <button class="tab-btn {activeTab === 'enhance' ? 'active' : ''}" onclick={() => activeTab = 'enhance'}>
-                    <span class="tab-icon">🪄</span> Enhance
+                    <svg class="ui-icon tab-icon" aria-hidden="true"><use href="#icon-enhance" /></svg> Enhance
                 </button>
                 <button class="tab-btn {activeTab === 'video' ? 'active' : ''}" onclick={() => activeTab = 'video'}>
-                    <span class="tab-icon">🎬</span> Create Video
+                    <svg class="ui-icon tab-icon" aria-hidden="true"><use href="#icon-video" /></svg> Create Video
                 </button>
                 <div class="tab-slider tab-slider-4" style="transform: translateX({activeTab === 'generate' ? '0' : activeTab === 'upscale' ? '100%' : activeTab === 'enhance' ? '200%' : '300%'})"></div>
             </div>
@@ -1469,7 +1513,7 @@
                             </select>
                         </div>
                         <div class="field">
-                            <label>Orientation</label>
+                            <span class="field-label">Orientation</span>
                             <div class="orient-row">
                                 {#if rhubZimageWidth !== rhubZimageHeight}
                                     <button type="button" class="orient-btn {rhubZimageOrientation === 'portrait' ? 'active' : ''}" onclick={() => rhubZimageOrientation = 'portrait'}>Portrait</button>
@@ -1518,7 +1562,7 @@
                             </select>
                         </div>
                         <div class="field">
-                            <label>Orientation</label>
+                            <span class="field-label">Orientation</span>
                             <div class="orient-row">
                                 <button type="button" class="orient-btn {rhubKleinOrientation === 'portrait' ? 'active' : ''}" onclick={() => rhubKleinOrientation = 'portrait'}>Portrait</button>
                                 <button type="button" class="orient-btn {rhubKleinOrientation === 'landscape' ? 'active' : ''}" onclick={() => rhubKleinOrientation = 'landscape'}>Landscape</button>
@@ -1826,7 +1870,7 @@
                         ondragleave={(e) => { e.currentTarget.classList.remove('dragover'); }}
                         ondrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('dragover'); handleDrop(e); }}
                     >
-                        <span class="drop-icon">📤</span>
+                        <svg class="ui-icon drop-icon" aria-hidden="true"><use href="#icon-upload" /></svg>
                         <span class="drop-text">Click to upload or drag & drop</span>
                         <input id="fileUploadInput" type="file" multiple accept="image/*" bind:this={fileInput} onchange={handleFileSelect} hidden />
                     </div>
@@ -1897,7 +1941,7 @@
                         ondragleave={(e) => { e.currentTarget.classList.remove('dragover'); }}
                         ondrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('dragover'); handleEnhanceDrop(e); }}
                     >
-                        <span class="drop-icon">📤</span>
+                        <svg class="ui-icon drop-icon" aria-hidden="true"><use href="#icon-upload" /></svg>
                         <span class="drop-text">Click to upload or drag & drop</span>
                         <input id="enhanceFileUploadInput" type="file" accept="image/*" bind:this={enhanceFileInput} onchange={handleEnhanceFileSelect} hidden />
                     </div>
@@ -1923,7 +1967,7 @@
                 </div>
 
                 <div class="field">
-                    <label for="videoPrompt">Prompt <span style="color:#ef4444">*</span></label>
+                    <label for="videoPrompt">Prompt <span class="required-marker">*</span></label>
                     <textarea
                         id="videoPrompt"
                         bind:value={videoPrompt}
@@ -1953,7 +1997,7 @@
                                 <div class="video-ref-embedded">
                                     <img class="embedded-thumb" src={videoImageUrls[i]} alt="Image {i + 1}" />
                                     <div class="video-ref-embedded-actions">
-                                        <button type="button" class="add-lora-btn" onclick={() => openVideoFileUpload(i)}>📁 Replace</button>
+                                        <button type="button" class="add-lora-btn" onclick={() => openVideoFileUpload(i)}><svg class="ui-icon btn-icon" aria-hidden="true"><use href="#icon-upload" /></svg> Replace</button>
                                         <button type="button" class="add-lora-btn" onclick={() => clearVideoImageUrl(i)}>✕ Clear</button>
                                         {#if videoImageUrls.length > 1}
                                             <button type="button" class="add-lora-btn" onclick={() => removeVideoImageUrl(i)}>− Remove slot</button>
@@ -1962,8 +2006,8 @@
                                 </div>
                             {:else}
                                 <div class="video-ref-row">
-                                    <input type="text" id="videoImg_{i}" bind:value={videoImageUrls[i]} placeholder="Paste URL or use 📁 to upload (JPEG, PNG, WebP)" style="flex: 1; min-width: 0;" />
-                                    <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoFileUpload(i)}>📁</button>
+                                    <input type="text" id="videoImg_{i}" bind:value={videoImageUrls[i]} placeholder="Paste URL or upload from disk (JPEG, PNG, WebP)" style="flex: 1; min-width: 0;" />
+                                    <button type="button" class="upload-btn-inline" title="Upload from disk" aria-label="Upload image from disk" onclick={() => openVideoFileUpload(i)}><svg class="ui-icon btn-icon" aria-hidden="true"><use href="#icon-upload" /></svg></button>
                                     {#if videoImageUrls.length > 1}
                                         <button type="button" class="upload-btn-inline" title="Remove" onclick={() => removeVideoImageUrl(i)}>×</button>
                                     {/if}
@@ -1995,7 +2039,7 @@
                                 <div class="video-ref-embedded">
                                     <video class="embedded-video-thumb" src={videoVideoUrls[i]} muted playsinline></video>
                                     <div class="video-ref-embedded-actions">
-                                        <button type="button" class="add-lora-btn" onclick={() => openVideoVideoUpload(i)}>📁 Replace</button>
+                                        <button type="button" class="add-lora-btn" onclick={() => openVideoVideoUpload(i)}><svg class="ui-icon btn-icon" aria-hidden="true"><use href="#icon-upload" /></svg> Replace</button>
                                         <button type="button" class="add-lora-btn" onclick={() => clearVideoVideoUrl(i)}>✕ Clear</button>
                                         {#if videoVideoUrls.length > 1}
                                             <button type="button" class="add-lora-btn" onclick={() => removeVideoVideoUrl(i)}>− Remove slot</button>
@@ -2004,8 +2048,8 @@
                                 </div>
                             {:else}
                                 <div class="video-ref-row">
-                                    <input type="text" id="videoRef_{i}" bind:value={videoVideoUrls[i]} placeholder="Paste URL or use 📁 to upload (MP4, MOV)" style="flex: 1; min-width: 0;" />
-                                    <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoVideoUpload(i)}>📁</button>
+                                    <input type="text" id="videoRef_{i}" bind:value={videoVideoUrls[i]} placeholder="Paste URL or upload from disk (MP4, MOV)" style="flex: 1; min-width: 0;" />
+                                    <button type="button" class="upload-btn-inline" title="Upload from disk" aria-label="Upload video from disk" onclick={() => openVideoVideoUpload(i)}><svg class="ui-icon btn-icon" aria-hidden="true"><use href="#icon-upload" /></svg></button>
                                     {#if videoVideoUrls.length > 1}
                                         <button type="button" class="upload-btn-inline" title="Remove" onclick={() => removeVideoVideoUrl(i)}>×</button>
                                     {/if}
@@ -2086,9 +2130,9 @@
                             </label>
                             {#if videoAudioUrls[i].startsWith('data:')}
                                 <div class="video-ref-embedded">
-                                    <span class="embedded-audio-icon">🎵</span>
+                                    <svg class="ui-icon embedded-audio-icon" aria-hidden="true"><use href="#icon-audio" /></svg>
                                     <div class="video-ref-embedded-actions">
-                                        <button type="button" class="add-lora-btn" onclick={() => openVideoAudioUpload(i)}>📁 Replace</button>
+                                        <button type="button" class="add-lora-btn" onclick={() => openVideoAudioUpload(i)}><svg class="ui-icon btn-icon" aria-hidden="true"><use href="#icon-upload" /></svg> Replace</button>
                                         <button type="button" class="add-lora-btn" onclick={() => clearVideoAudioUrl(i)}>✕ Clear</button>
                                         {#if videoAudioUrls.length > 1}
                                             <button type="button" class="add-lora-btn" onclick={() => removeVideoAudioUrl(i)}>− Remove slot</button>
@@ -2097,8 +2141,8 @@
                                 </div>
                             {:else}
                                 <div class="video-ref-row">
-                                    <input type="text" id="videoAudio_{i}" bind:value={videoAudioUrls[i]} placeholder="Paste URL or use 📁 to upload (MP3, WAV)" style="flex: 1; min-width: 0;" />
-                                    <button type="button" class="upload-btn-inline" title="Upload from disk" onclick={() => openVideoAudioUpload(i)}>📁</button>
+                                    <input type="text" id="videoAudio_{i}" bind:value={videoAudioUrls[i]} placeholder="Paste URL or upload from disk (MP3, WAV)" style="flex: 1; min-width: 0;" />
+                                    <button type="button" class="upload-btn-inline" title="Upload from disk" aria-label="Upload audio from disk" onclick={() => openVideoAudioUpload(i)}><svg class="ui-icon btn-icon" aria-hidden="true"><use href="#icon-upload" /></svg></button>
                                     {#if videoAudioUrls.length > 1}
                                         <button type="button" class="upload-btn-inline" title="Remove" onclick={() => removeVideoAudioUrl(i)}>×</button>
                                     {/if}
@@ -2210,10 +2254,11 @@
                                             <div class="img-overlay">Click to Enlarge</div>
                                         </button>
                                     {:else if fileExt === 'mp4'}
+                                        <!-- svelte-ignore a11y_media_has_caption -->
                                         <video class="video-preview" src={fileUrl} controls></video>
                                     {:else}
                                         <a class="file-download" href={fileUrl} download={res.filename}>
-                                            <div class="file-icon">📄</div>
+                                            <svg class="ui-icon file-icon" aria-hidden="true"><use href="#icon-file" /></svg>
                                             <div class="file-info">
                                                 <span class="file-name">{res.filename}</span>
                                                 <span class="file-type">{fileExt?.toUpperCase() || 'FILE'}</span>
@@ -2262,6 +2307,40 @@
 </main>
 
 <style>
+    :global(:root) {
+        --color-bg: #f7faff;
+        --color-bg-accent: #ecf4ff;
+        --color-surface: #fbfdff;
+        --color-surface-container: #f3f7fc;
+        --color-surface-raised: #fbfdff;
+        --color-on-primary: #fbfdff;
+        --color-outline: #d8e1ec;
+        --color-outline-strong: #b8c5d6;
+        --color-text: #172033;
+        --color-text-muted: #5c6b80;
+        --color-text-subtle: #7d8ca0;
+        --color-primary: #2563eb;
+        --color-primary-hover: #1d4ed8;
+        --color-primary-soft: #e9f1ff;
+        --color-primary-outline: #b8d2ff;
+        --color-danger: #dc2626;
+        --color-danger-soft: #fee8e8;
+        --color-success: #15803d;
+        --color-success-soft: #dcfce7;
+        --color-warning: #92400e;
+        --color-warning-soft: #fef3c7;
+        --radius-xs: 6px;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --elevation-1: 0 1px 2px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
+        --elevation-2: 0 10px 28px rgba(15, 23, 42, 0.09);
+        --elevation-3: 0 18px 48px rgba(15, 23, 42, 0.12);
+        --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.18);
+        --state-layer: rgba(37, 99, 235, 0.08);
+        --transition-fast: 150ms cubic-bezier(0.22, 1, 0.36, 1);
+        --transition-base: 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
     :global(*) {
         box-sizing: border-box;
     }
@@ -2270,11 +2349,31 @@
         background:
             radial-gradient(circle at top left, rgba(96, 165, 250, 0.18), transparent 28%),
             radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 24%),
-            linear-gradient(180deg, #ecf3ff 0%, #f8fafc 32%, #f8fafc 100%);
-        color: #1e293b;
+            linear-gradient(180deg, var(--color-bg-accent) 0%, var(--color-bg) 32%, var(--color-bg) 100%);
+        color: var(--color-text);
         margin: 0;
         -webkit-tap-highlight-color: transparent;
         overflow-x: hidden;
+    }
+    .icon-sprite {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+    }
+    .ui-icon {
+        width: 1em;
+        height: 1em;
+        display: inline-block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex-shrink: 0;
+    }
+    .btn-icon {
+        font-size: 1rem;
     }
     .container {
         max-width: 1180px;
@@ -2344,12 +2443,12 @@
     }
 
     .card, .results {
-        background: white;
+        background: var(--color-surface-raised);
         padding: 20px;
-        border-radius: 18px;
-        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--elevation-2);
         margin-bottom: 24px;
-        border: 1px solid rgba(203, 213, 225, 0.9);
+        border: 1px solid var(--color-outline);
         width: 100%;
     }
 
@@ -2378,22 +2477,22 @@
         gap: 12px;
         font-size: 1.125rem;
         font-weight: 700;
-        color: #0f172a;
+        color: var(--color-text);
     }
     .api-keys-summary {
         font-size: 0.78rem;
         font-weight: 500;
-        color: #64748b;
+        color: var(--color-text-muted);
     }
     .api-keys-chevron {
         font-size: 1.1rem;
-        color: #94a3b8;
-        transition: transform 0.2s ease;
+        color: var(--color-text-subtle);
+        transition: transform var(--transition-base);
         flex-shrink: 0;
     }
     .api-keys-chevron.open { transform: rotate(180deg); }
-    .api-keys-body { margin-top: 16px; padding-top: 16px; border-top: 1px solid #f1f5f9; }
-    .api-keys { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #f1f5f9; }
+    .api-keys-body { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-outline); }
+    .api-keys { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--color-outline); }
 
     /* Empty results state */
     .results-empty {
@@ -2401,20 +2500,20 @@
         align-items: center;
         justify-content: center;
         min-height: 80px;
-        background: #f8fafc;
+        background: var(--color-surface-container);
         border-style: dashed;
     }
     .empty-state-text {
         margin: 0;
         font-size: 0.875rem;
-        color: #94a3b8;
+        color: var(--color-text-subtle);
     }
 
     /* Advanced panel (progressive disclosure) */
     .advanced-panel {
         margin-top: 12px;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
+        border: 1px solid var(--color-outline);
+        border-radius: var(--radius-sm);
         padding: 0;
         overflow: hidden;
     }
@@ -2422,11 +2521,11 @@
         cursor: pointer;
         font-size: 0.75rem;
         font-weight: 600;
-        color: #64748b;
+        color: var(--color-text-muted);
         padding: 8px 12px;
         list-style: none;
         user-select: none;
-        background: #f8fafc;
+        background: var(--color-surface-container);
         display: flex;
         align-items: center;
         gap: 6px;
@@ -2440,7 +2539,7 @@
     .advanced-panel > summary::-webkit-details-marker { display: none; }
     .advanced-panel > *:not(summary) { padding: 12px; }
 
-    h2 { font-size: 1.125rem; font-weight: 700; color: #0f172a; margin: 0 0 16px 0; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9; }
+    h2 { font-size: 1.125rem; font-weight: 700; color: var(--color-text); margin: 0 0 16px 0; padding-bottom: 10px; border-bottom: 1px solid var(--color-outline); }
     
     .settings-header {
         display: flex;
@@ -2448,13 +2547,13 @@
         justify-content: space-between;
         margin-bottom: 16px;
         padding-bottom: 10px;
-        border-bottom: 1px solid #f1f5f9;
+        border-bottom: 1px solid var(--color-outline);
     }
     .settings-header h2 { margin: 0; border: none; padding: 0; }
     .settings-badge {
         font-size: 0.7rem;
-        background: #eff6ff;
-        color: #2563eb;
+        background: var(--color-primary-soft);
+        color: var(--color-primary);
         padding: 2px 10px;
         border-radius: 99px;
         font-weight: 700;
@@ -2473,7 +2572,8 @@
     }
 
     .field { margin-bottom: 12px; display: flex; flex-direction: column; width: 100%; }
-    label { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+    label,
+    .field-label { font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); margin-bottom: 4px; }
 
     /* Modern Tabs Styles */
     .tabs-container {
@@ -2481,11 +2581,12 @@
     }
     .tabs {
         display: flex;
-        background: #f1f5f9;
+        background: var(--color-surface-container);
         padding: 4px;
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         position: relative;
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        border: 1px solid var(--color-outline);
+        box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
     }
     .tab-btn {
         flex: 1;
@@ -2495,21 +2596,22 @@
         gap: 8px;
         min-height: 40px;
         padding: 8px 16px;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         border: none;
         background: transparent;
-        color: #64748b;
+        color: var(--color-text-muted);
         font-weight: 600;
         font-size: 0.9rem;
         cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: color var(--transition-fast), background var(--transition-fast);
         z-index: 2;
     }
     .tab-btn.active {
-        color: #2563eb;
+        color: var(--color-primary);
     }
     .tab-btn:not(.active):hover {
-        color: #1e293b;
+        color: var(--color-text);
+        background: rgba(37, 99, 235, 0.05);
     }
     .tab-slider {
         position: absolute;
@@ -2517,10 +2619,10 @@
         left: 4px;
         width: calc(50% - 4px);
         height: calc(100% - 8px);
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: var(--color-surface-raised);
+        border-radius: var(--radius-sm);
+        box-shadow: var(--elevation-1);
+        transition: transform var(--transition-base);
         z-index: 1;
     }
     .tab-slider-3 {
@@ -2538,24 +2640,25 @@
 
     /* Drop Zone Styles */
     .drop-zone {
-        border: 2px dashed #cbd5e1;
-        border-radius: 12px;
+        border: 2px dashed var(--color-outline-strong);
+        border-radius: var(--radius-md);
         padding: 40px 20px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: #f8fafc;
+        background: var(--color-surface-container);
         cursor: pointer;
-        transition: all 0.2s;
+        transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
         text-align: center;
     }
     .drop-zone:hover, .drop-zone.dragover {
-        border-color: #2563eb;
-        background: #eff6ff;
+        border-color: var(--color-primary);
+        background: var(--color-primary-soft);
+        box-shadow: var(--focus-ring);
     }
-    .drop-icon { font-size: 2.5rem; margin-bottom: 12px; }
-    .drop-text { font-size: 0.95rem; color: #475569; font-weight: 500; }
+    .drop-icon { font-size: 2.5rem; margin-bottom: 12px; color: var(--color-primary); }
+    .drop-text { font-size: 0.95rem; color: var(--color-text-muted); font-weight: 500; }
 
     /* Video tab — reference slot layout */
     .video-ref-slot {
@@ -2565,7 +2668,7 @@
         display: block;
         font-size: 0.8rem;
         font-weight: 600;
-        color: #475569;
+        color: var(--color-text-muted);
         margin-bottom: 4px;
     }
     .video-ref-row {
@@ -2578,9 +2681,9 @@
         align-items: center;
         gap: 10px;
         padding: 6px 10px;
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
+        background: var(--color-surface-container);
+        border: 1px solid var(--color-outline);
+        border-radius: var(--radius-sm);
     }
     .video-ref-embedded-actions {
         display: flex;
@@ -2589,24 +2692,27 @@
     }
     .embedded-audio-icon {
         font-size: 1.5rem;
+        color: var(--color-primary);
         flex-shrink: 0;
     }
     .upload-btn-inline {
         width: auto;
         min-height: unset;
         flex-shrink: 0;
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
-        border-radius: 6px;
+        background: var(--color-surface-container);
+        border: 1px solid var(--color-outline);
+        border-radius: var(--radius-xs);
         padding: 6px 10px;
         font-weight: normal;
         cursor: pointer;
         font-size: 1rem;
         line-height: 1;
-        transition: background 0.15s;
+        transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
     }
     .upload-btn-inline:hover {
-        background: #e2e8f0;
+        background: var(--color-primary-soft);
+        border-color: var(--color-primary-outline);
+        color: var(--color-primary);
     }
 
     /* Video tab */
@@ -2614,7 +2720,7 @@
         width: 100%;
         border-radius: 8px;
         max-height: 360px;
-        background: #000;
+        background: #06080d;
         display: block;
     }
     .embedded-image-row {
@@ -2628,7 +2734,7 @@
         height: 64px;
         object-fit: cover;
         border-radius: 6px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-outline);
         flex-shrink: 0;
     }
     .embedded-video-thumb {
@@ -2636,14 +2742,14 @@
         height: 54px;
         object-fit: cover;
         border-radius: 6px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--color-outline);
         background: #0f172a;
         flex-shrink: 0;
     }
     .badge-embedded {
         display: inline-block;
-        background: #dbeafe;
-        color: #1d4ed8;
+        background: var(--color-primary-soft);
+        color: var(--color-primary-hover);
         font-size: 0.65rem;
         font-weight: 600;
         padding: 1px 6px;
@@ -2653,7 +2759,7 @@
     }
     .field-hint {
         font-size: 0.78rem;
-        color: #64748b;
+        color: var(--color-text-muted);
     }
 
     .file-list {
@@ -2663,15 +2769,15 @@
         margin-top: 16px;
     }
     .file-item {
-        background: #e2e8f0;
+        background: var(--color-surface-container);
         padding: 6px 12px;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         font-size: 0.85rem;
         display: flex;
         align-items: center;
         gap: 10px;
         max-width: 240px;
-        border: 1px solid #cbd5e1;
+        border: 1px solid var(--color-outline);
     }
     .file-name {
         white-space: nowrap;
@@ -2680,9 +2786,9 @@
         font-weight: 500;
     }
     .remove-file {
-        background: #f1f5f9;
+        background: var(--color-surface-container);
         border: none;
-        color: #64748b;
+        color: var(--color-text-muted);
         cursor: pointer;
         font-size: 1.2rem;
         padding: 0;
@@ -2694,7 +2800,7 @@
         justify-content: center;
         line-height: 1;
     }
-    .remove-file:hover { background: #fee2e2; color: #dc2626; }
+    .remove-file:hover { background: var(--color-danger-soft); color: var(--color-danger); }
 
     /* Toggle Switch Styles */
     .toggle-field { margin-bottom: 16px; }
@@ -2704,11 +2810,11 @@
         justify-content: space-between;
         cursor: pointer;
         padding: 12px;
-        background: #f8fafc;
-        border-radius: 8px;
-        border: 1px solid #e2e8f0;
+        background: var(--color-surface-container);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-outline);
     }
-    .toggle-text { font-weight: 600; color: #1e293b; }
+    .toggle-text { font-weight: 600; color: var(--color-text); }
     .toggle-checkbox {
         position: absolute;
         opacity: 0;
@@ -2719,9 +2825,9 @@
         position: relative;
         width: 44px;
         height: 24px;
-        background: #cbd5e1;
+        background: var(--color-outline-strong);
         border-radius: 99px;
-        transition: background 0.2s;
+        transition: background var(--transition-fast);
         flex-shrink: 0;
     }
     .toggle-slider-ui::before {
@@ -2731,35 +2837,43 @@
         left: 2px;
         width: 20px;
         height: 20px;
-        background: white;
+        background: var(--color-surface-raised);
         border-radius: 50%;
-        transition: transform 0.2s;
+        transition: transform var(--transition-fast);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
-    .toggle-checkbox:checked + .toggle-slider-ui { background: #2563eb; }
+    .toggle-checkbox:checked + .toggle-slider-ui { background: var(--color-primary); }
     .toggle-checkbox:checked + .toggle-slider-ui::before { transform: translateX(20px); }
-    .toggle-description { font-size: 0.75rem; color: #64748b; margin-top: 4px; margin-bottom: 12px; }
+    .toggle-description { font-size: 0.75rem; color: var(--color-text-muted); margin-top: 4px; margin-bottom: 12px; }
     
     input, select, textarea {
         width: 100%;
         padding: 12px;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
+        border: 1px solid var(--color-outline-strong);
+        border-radius: var(--radius-sm);
         font-size: 1rem;
         appearance: none;
-        background-color: white;
+        background-color: var(--color-surface-raised);
+        color: var(--color-text);
+        transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+    }
+    input:hover, select:hover, textarea:hover {
+        border-color: var(--color-primary-outline);
+    }
+    input:focus, select:focus, textarea:focus {
+        border-color: var(--color-primary);
+        outline: none;
+        box-shadow: var(--focus-ring);
     }
 
     select {
-        background-color: #f8fafc;
+        background-color: var(--color-surface-container);
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
         background-repeat: no-repeat;
         background-position: right 12px center;
         padding-right: 40px;
-        border-color: #94a3b8;
         cursor: pointer;
     }
-    select:focus { border-color: #2563eb; outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
 
     /* Orientation toggle */
     .orient-row {
@@ -2772,36 +2886,36 @@
     .orient-btn {
         flex: 1;
         min-height: 40px;
-        background: #f1f5f9;
-        color: #475569;
-        border: 1px solid #e2e8f0;
+        background: var(--color-surface-container);
+        color: var(--color-text-muted);
+        border: 1px solid var(--color-outline);
         font-size: 0.875rem;
         font-weight: 500;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         cursor: pointer;
-        transition: all 0.15s;
+        transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
         width: auto;
         padding: 8px 12px;
     }
     .orient-btn.active {
-        background: #2563eb;
-        color: white;
-        border-color: #2563eb;
+        background: var(--color-primary);
+        color: var(--color-on-primary);
+        border-color: var(--color-primary);
     }
-    .orient-btn:hover:not(.active) { background: #e2e8f0; }
+    .orient-btn:hover:not(.active) { background: var(--color-primary-soft); border-color: var(--color-primary-outline); color: var(--color-primary); }
     .orient-square {
         font-size: 0.875rem;
-        color: #64748b;
+        color: var(--color-text-muted);
         font-style: italic;
     }
     .dim-preview {
         font-size: 0.8rem;
         font-weight: 700;
-        color: #2563eb;
-        background: #eff6ff;
-        border: 1px solid #bfdbfe;
+        color: var(--color-primary);
+        background: var(--color-primary-soft);
+        border: 1px solid var(--color-primary-outline);
         padding: 4px 10px;
-        border-radius: 6px;
+        border-radius: var(--radius-xs);
         font-family: 'Courier New', monospace;
         white-space: nowrap;
     }
@@ -2818,9 +2932,9 @@
     .main-action {
         font-size: 1.1rem;
         padding: 16px;
-        background: #2563eb;
-        color: white;
-        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1);
+        background: var(--color-primary);
+        color: var(--color-on-primary);
+        box-shadow: var(--elevation-1);
     }
     .action-grid {
         display: grid;
@@ -2833,28 +2947,41 @@
         min-height: 48px;
         padding: 12px; 
         border: none; 
-        border-radius: 8px; 
+        border-radius: var(--radius-sm); 
         font-weight: 600; 
         cursor: pointer; 
-        transition: transform 0.1s, opacity 0.2s, background 0.2s; 
+        transition: transform var(--transition-fast), opacity var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast); 
         font-size: 1rem;
     }
     button:active { transform: scale(0.98); }
     button:hover { opacity: 0.9; }
-    .btn-primary { background: #2563eb; color: white; }
-    .btn-secondary { background: #e2e8f0; color: #475569; }
-    .btn-danger { background: #dc2626; color: white; }
+    button:focus-visible,
+    a:focus-visible,
+    .drop-zone:focus-visible {
+        outline: none;
+        box-shadow: var(--focus-ring);
+    }
+    button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+        transform: none;
+    }
+    .required-marker { color: var(--color-danger); }
+    .btn-primary { background: var(--color-primary); color: var(--color-on-primary); }
+    .btn-primary:hover, .main-action:hover { background: var(--color-primary-hover); opacity: 1; }
+    .btn-secondary { background: var(--color-surface-container); color: var(--color-text-muted); border: 1px solid var(--color-outline); }
+    .btn-danger { background: var(--color-danger); color: var(--color-on-primary); }
 
     .status-badge { font-size: 0.65rem; padding: 4px 8px; border-radius: 99px; font-weight: 700; text-transform: uppercase; margin-right: 8px; }
-    .initializing { background: #fef3c7; color: #92400e; }
-    .processing { background: #dbeafe; color: #1e40af; }
+    .initializing { background: var(--color-warning-soft); color: var(--color-warning); }
+    .processing { background: var(--color-primary-soft); color: #1e40af; }
     .loading_model { background: #ede9fe; color: #5b21b6; }
-    .success { background: #dcfce7; color: #166534; }
-    .failed, .cancelled { background: #fee2e2; color: #991b1b; }
+    .success { background: var(--color-success-soft); color: var(--color-success); }
+    .failed, .cancelled { background: var(--color-danger-soft); color: #991b1b; }
 
-    .result-item { padding: 16px 0; border-bottom: 1px solid #f1f5f9; width: 100%; }
+    .result-item { padding: 16px 0; border-bottom: 1px solid var(--color-outline); width: 100%; }
     .result-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-    .filename { font-size: 0.8rem; color: #64748b; word-break: break-all; }
+    .filename { font-size: 0.8rem; color: var(--color-text-muted); word-break: break-all; }
 
     .result-content { 
         display: flex;
@@ -2870,26 +2997,26 @@
     
     .img-container { position: relative; padding: 0; border: none; background: none; width: 100%; border-radius: 8px; overflow: hidden; }
     .img-container img { width: 100%; display: block; }
-    .img-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); color: white; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; font-size: 0.8rem; }
+    .img-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(6, 8, 13, 0.48); color: var(--color-on-primary); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity var(--transition-fast); font-size: 0.8rem; }
 
     /* File Download Card Styles */
-    .file-download { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 8px; text-decoration: none; color: inherit; width: 100%; min-height: 150px; }
-    .file-icon { font-size: 2.5rem; margin-bottom: 8px; }
+    .file-download { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; background: var(--color-surface-container); border: 2px dashed var(--color-outline-strong); border-radius: var(--radius-sm); text-decoration: none; color: inherit; width: 100%; min-height: 150px; }
+    .file-icon { font-size: 2.5rem; margin-bottom: 8px; color: var(--color-primary); }
     .file-info { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 12px; text-align: center; }
-    .file-name { font-size: 0.75rem; font-weight: 600; color: #1e293b; word-break: break-all; }
-    .file-type { font-size: 0.65rem; padding: 2px 8px; background: #e2e8f0; border-radius: 99px; font-weight: 600; color: #64748b; }
-    .download-btn { padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
-    .download-btn:hover { background: #1d4ed8; }
+    .file-name { font-size: 0.75rem; font-weight: 600; color: var(--color-text); word-break: break-all; }
+    .file-type { font-size: 0.65rem; padding: 2px 8px; background: var(--color-surface-container); border-radius: 99px; font-weight: 600; color: var(--color-text-muted); }
+    .download-btn { padding: 8px 16px; background: var(--color-primary); color: var(--color-on-primary); border: none; border-radius: var(--radius-xs); font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+    .download-btn:hover { background: var(--color-primary-hover); }
     
     @media (hover: hover) {
         .img-container:hover .img-overlay { opacity: 1; }
     }
 
-    .loading-placeholder, .error-placeholder { width: 100%; aspect-ratio: 1; background: #f1f5f9; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 0.8rem; color: #94a3b8; border: 2px dashed #e2e8f0; }
+    .loading-placeholder, .error-placeholder { width: 100%; aspect-ratio: 1; background: var(--color-surface-container); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--color-text-subtle); border: 2px dashed var(--color-outline); }
     .prompt-display { display: flex; flex-direction: column; width: 100%; }
-    .prompt-label { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 4px; }
-    .prompt-display textarea { width: 100%; height: 100px; background: #f8fafc; border: 1px solid #f1f5f9; font-size: 0.85rem; }
-    .error-text { color: #dc2626; font-size: 0.8rem; margin-top: 8px; }
+    .prompt-label { font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); margin-bottom: 4px; }
+    .prompt-display textarea { width: 100%; height: 100px; background: var(--color-surface-container); border: 1px solid var(--color-outline); font-size: 0.85rem; }
+    .error-text { color: var(--color-danger); font-size: 0.8rem; margin-top: 8px; }
     .result-actions {
         margin-top: 10px;
         display: flex;
@@ -2900,10 +3027,10 @@
         width: auto;
         min-height: 36px;
         padding: 8px 12px;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
-        background: white;
-        color: #334155;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-outline);
+        background: var(--color-surface-raised);
+        color: var(--color-text);
         font-size: 0.8rem;
         font-weight: 600;
         text-decoration: none;
@@ -2918,45 +3045,45 @@
         pointer-events: none;
     }
     .result-action-btn.danger {
-        background: #fee2e2;
+        background: var(--color-danger-soft);
         border-color: #fecaca;
         color: #b91c1c;
     }
 
     /* Queue Styles */
-    .queue-section { background: #eff6ff; border-color: #bfdbfe; }
+    .queue-section { background: var(--color-primary-soft); border-color: var(--color-primary-outline); }
     .queue-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
     .queue-item { 
         display: flex; 
         align-items: center; 
         justify-content: space-between; 
         padding: 10px 14px; 
-        background: #f8fafc; 
-        border: 1px solid #e2e8f0; 
-        border-radius: 8px; 
+        background: var(--color-surface-raised); 
+        border: 1px solid var(--color-outline); 
+        border-radius: var(--radius-sm); 
         gap: 12px;
     }
     .queue-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
     .queue-tag { 
         font-size: 0.65rem; 
         font-weight: 700; 
-        background: #e2e8f0; 
-        color: #475569; 
+        background: var(--color-surface-container); 
+        color: var(--color-text-muted); 
         padding: 2px 6px; 
         border-radius: 4px; 
         white-space: nowrap;
     }
     .queue-prompt { 
         font-size: 0.85rem; 
-        color: #1e293b; 
+        color: var(--color-text); 
         white-space: nowrap; 
         overflow: hidden; 
         text-overflow: ellipsis; 
         flex: 1;
     }
     .queue-remove { 
-        background: #fee2e2; 
-        color: #dc2626; 
+        background: var(--color-danger-soft); 
+        color: var(--color-danger); 
         border: none; 
         width: 28px; 
         height: 28px; 
@@ -2975,13 +3102,13 @@
     .loader-dots { margin-left: 8px; }
 
     /* Modal Styles */
-    .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(6, 8, 13, 0.95); z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .modal-content { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
     .modal-content img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .close-modal { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 10px; line-height: 1; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+    .close-modal { position: absolute; top: 20px; right: 20px; background: rgba(251, 253, 255, 0.2); border: none; color: var(--color-on-primary); font-size: 1.5rem; cursor: pointer; padding: 10px; line-height: 1; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
 
     /* Toast Notification Styles */
-    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; animation: slideUp 0.3s ease-out; max-width: 400px; text-align: center; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--color-text); color: var(--color-on-primary); padding: 12px 20px; border-radius: var(--radius-sm); box-shadow: var(--elevation-2); z-index: 9999; animation: slideUp var(--transition-base); max-width: 400px; text-align: center; }
     @keyframes slideUp {
         from { transform: translateX(-50%) translateY(20px); opacity: 0; }
         to { transform: translateX(-50%) translateY(0); opacity: 1; }
@@ -3001,7 +3128,7 @@
     .multi-lora-label {
         font-size: 0.8rem;
         font-weight: 600;
-        color: #64748b;
+        color: var(--color-text-muted);
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
@@ -3010,10 +3137,10 @@
         min-height: 34px;
         padding: 6px 14px;
         font-size: 0.8rem;
-        background: #eff6ff;
-        color: #2563eb;
-        border: 1px solid #bfdbfe;
-        border-radius: 6px;
+        background: var(--color-primary-soft);
+        color: var(--color-primary);
+        border: 1px solid var(--color-primary-outline);
+        border-radius: var(--radius-xs);
         font-weight: 600;
     }
     .add-lora-btn:hover { background: #dbeafe; opacity: 1; }
@@ -3022,9 +3149,9 @@
         align-items: flex-end;
         gap: 8px;
         padding: 12px;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
+        background: var(--color-surface-container);
+        border: 1px solid var(--color-outline);
+        border-radius: var(--radius-sm);
     }
     .lora-entry-fields {
         flex: 1;
@@ -3040,9 +3167,9 @@
         height: 32px;
         padding: 0;
         flex-shrink: 0;
-        background: #fee2e2;
-        color: #dc2626;
-        border-radius: 6px;
+        background: var(--color-danger-soft);
+        color: var(--color-danger);
+        border-radius: var(--radius-xs);
         font-size: 1.2rem;
         line-height: 1;
         display: flex;
@@ -3054,12 +3181,12 @@
         margin-top: -2px;
         margin-bottom: 4px;
         font-size: 0.85rem;
-        color: #64748b;
+        color: var(--color-text-muted);
     }
     .field-hint {
         margin-top: 6px;
         font-size: 0.78rem;
-        color: #64748b;
+        color: var(--color-text-muted);
         line-height: 1.35;
     }
 
