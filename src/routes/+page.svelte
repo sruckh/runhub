@@ -44,11 +44,12 @@
     let zimageCfgNormalization = $state(true);
     let zimageCfgTruncation = $state(1.0);
     let zimageVaeTiling = $state<boolean | null>(null); // null = auto
+    let zimageUpscaleModel = $state('nomos_webphoto');
     let zimageUpscaleEnabled = $state(true);
     let zimageUpscaleFactor = $state(1.5);
 
     // Z-Image second pass params
-    let secondPassEnabled = $state(false);
+    let secondPassEnabled = $state(true);
     let secondPassUpscale = $state(1.25);
     let secondPassStrength = $state(0.42);
     let secondPassGuidanceScale = $state(4.5);
@@ -270,6 +271,24 @@
         return kleinPresetDefaults[presetId] || kleinPresetDefaults.realistic_character;
     }
 
+    const zimageUpscaleModels = [
+        {
+            id: 'nomos_webphoto',
+            label: 'NomosWebPhoto (RealPLKSR)',
+            hint: 'Default. Natural realistic-photo detail; best general choice for people.'
+        },
+        {
+            id: 'nomos_webphoto_esrgan',
+            label: 'NomosWebPhoto (ESRGAN)',
+            hint: 'Same realistic target with a slightly different detail character.'
+        },
+        {
+            id: 'purephoto',
+            label: 'PurePhoto (RealPLKSR)',
+            hint: 'Legacy sharper model; can over-process faces.'
+        }
+    ];
+
     const rhubZimageStyles = [
         'None', 'Phone Photo', 'Casual Photo', 'Vintage Photo', 'Portra Film Photo',
         '70s Memories Photo', 'Flash 90s Photo', 'Production Photo', 'Classic Film Photo',
@@ -373,6 +392,7 @@
             zimage_cfg_normalization: zimageCfgNormalization,
             zimage_cfg_truncation: zimageCfgTruncation,
             zimage_vae_tiling: zimageVaeTiling,
+            upscale_model: zimageUpscaleModel,
             upscale_enabled: zimageUpscaleEnabled,
             upscale_factor: zimageUpscaleFactor,
             second_pass_enabled: secondPassEnabled,
@@ -1754,14 +1774,26 @@
                             </div>
                         </details>
 
+                        <div class="field" style="margin-top: 12px;">
+                            <label for="zimageUpscaleModel">Detail Upscaler</label>
+                            <select id="zimageUpscaleModel" bind:value={zimageUpscaleModel}>
+                                {#each zimageUpscaleModels as upscaler}
+                                    <option value={upscaler.id}>{upscaler.label}</option>
+                                {/each}
+                            </select>
+                            <p class="field-hint">
+                                {zimageUpscaleModels.find((upscaler) => upscaler.id === zimageUpscaleModel)?.hint}
+                            </p>
+                        </div>
+
                         <div class="field toggle-field" style="margin-top: 12px;">
                             <label for="zimageUpscaleEnabled" class="toggle-label">
-                                <span class="toggle-text">RealPLKSR Detail Upscale</span>
+                                <span class="toggle-text">Single-Pass Detail Upscale</span>
                                 <input type="checkbox" id="zimageUpscaleEnabled" bind:checked={zimageUpscaleEnabled} class="toggle-checkbox" disabled={secondPassEnabled} />
                                 <span class="toggle-slider-ui"></span>
                             </label>
                             <p class="toggle-description">
-                                Default ON. Pure super-resolution with no diffusion repaint. Disabled automatically when img2img hires-fix is enabled.
+                                Pure super-resolution with no diffusion repaint. Skipped automatically when img2img hires-fix is enabled.
                             </p>
                         </div>
 
@@ -1782,7 +1814,7 @@
                                 <input type="checkbox" id="secondPassEnabled" bind:checked={secondPassEnabled} class="toggle-checkbox" />
                                 <span class="toggle-slider-ui"></span>
                             </label>
-                            <p class="toggle-description">Opt-in upscale plus re-diffusion for heavy stylistic refinement. This can smooth fine texture and replaces the default detail upscale.</p>
+                            <p class="toggle-description">Default ON. Upscales with the selected detail model, then lightly re-diffuses to clean super-resolution artifacts. Replaces single-pass detail upscale.</p>
                         </div>
 
                         {#if secondPassEnabled}
