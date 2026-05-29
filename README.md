@@ -48,8 +48,9 @@ The application runs as a single SvelteKit container. API routes handle server-s
 3. Background processor picks the next task:
    - AI synthesizes the prompt (same Gemini/Qwen pipeline as FLUX.1-dev). Trigger words from all LoRAs in the stack are automatically aggregated.
 4. Job is submitted to the RunPod Z-Image Serverless endpoint (`/run`) using the new multi-LoRA `loras` array.
-5. The client polls `/api/zimage-check` until the job completes, then downloads the JPG from the S3 URL returned by RunPod.
-6. Optionally, a **High-Res Refinement** second pass is run server-side before delivery.
+5. By default, the worker applies the RealPLKSR detail upscale as a pure super-resolution pass (`upscale_enabled=true`, `upscale_factor=1.5`), so a 1024×1024 generation returns a 1536×1536 PNG.
+6. The optional **img2img Hires-Fix** path can be enabled for heavy stylistic refinement. It replaces the default detail upscale and re-diffuses the image through Z-Image img2img.
+7. The client polls `/api/zimage-check` until the job completes, then downloads the image from the S3 URL returned by RunPod.
 
 ### Generation Flow — FLUX.2-klein (RunPod Serverless)
 
@@ -168,18 +169,21 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 | Parameter                  | Default       | Description                                                                       |
 | -------------------------- | ------------- | --------------------------------------------------------------------------------- |
-| Inference Steps            | `40`          | Number of diffusion steps. The current upstream worker auto-tunes around 40 for Z-Image Base. |
+| Inference Steps            | `50`          | Number of diffusion steps. 50 is the current upstream Base-model sweet spot for detail. |
 | Guidance Scale             | `4.5`         | CFG scale. 4.5 is the current photorealism default; higher increases adherence but can over-saturate. |
-| Scheduler Shift            | `3.0`         | FlowMatch scheduler shift. 3.0 is the photorealism sweet spot; 5–7 for creative composition. |
-| CFG Normalization          | on            | Enabled by default in the current Z-Image worker tuning for photorealism. |
-| Beta Sigmas                | off           | Disabled by default in the current worker; can be enabled explicitly if a specific LoRA or endpoint revision needs it. |
+| Scheduler Shift            | `1.0`         | FlowMatch scheduler shift. 1.0 matches the Z-Image architecture/scheduler default and preserves detail refinement. Raise only when a specialized LoRA requires it. |
+| CFG Normalization          | on            | Enabled by default per the official Tongyi-MAI photorealism recommendation. |
+| CFG Truncation             | `1.0`         | Recommended default. Lower values can reduce over-saturation. |
+| Beta Sigmas                | off           | Disabled by default to match the official Z-Image noise distribution. |
 | LoRA Stack                 | 1 empty row   | Multiple LoRAs can be sent via `loras[]`, each with URL, trigger word, and scale. Select from the curated preset dropdown (populated from `loras-zimage.json`) or enter any URL directly. |
 | Seed                       | `-1` (random) | Fixed seed for reproducibility.                                                   |
-| Enable High-Res Refinement | **on**        | RealPLKSR upscale + Z-Image img2img refinement pass for extra detail. On by default. |
-| ↳ Upscale Factor           | `1.25`        | Scale multiplier for the refinement pass. 1.25× stays within 24 GB with LoRAs loaded. |
-| ↳ Denoising Strength       | `0.42`        | Img2img denoising strength. The current upstream worker uses 0.42 to clean the under-denoised base-pass look without changing composition too aggressively. |
-| ↳ Pass 2 Steps             | `28`          | Inference steps for the refinement pass.                                          |
-| ↳ Pass 2 Guidance          | `4.5`         | CFG scale for the refinement pass.                                                |
+| RealPLKSR Detail Upscale   | **on**        | Pure feed-forward super-resolution with no diffusion repaint. Adds detail while preserving fine texture and skin detail. Disabled automatically when img2img Hires-Fix is enabled. |
+| ↳ Detail Upscale Factor    | `1.5`         | Net output scale for the RealPLKSR detail pass. A 1024×1024 request returns a 1536×1536 PNG. |
+| img2img Hires-Fix          | off           | Optional upscale + Z-Image img2img re-diffusion path for heavy stylistic refinement. This can smooth fine detail and replaces the default detail upscale. |
+| ↳ Hires-Fix Upscale Factor | `1.25`        | Scale multiplier for the img2img hires-fix path. 1.25× stays within 24 GB with LoRAs loaded. |
+| ↳ Denoising Strength       | `0.42`        | Img2img denoising strength tuned to clean base-pass artifacts without losing composition. Lower values preserve more first-pass character detail; higher values refine more aggressively. |
+| ↳ Pass 2 Steps             | `28`          | Inference steps for the img2img pass.                                             |
+| ↳ Pass 2 Guidance          | `4.5`         | CFG scale for the img2img pass.                                                   |
 | ↳ Pass 2 Prompt Limit      | `512`         | Token limit for the pass-2 prompt encoder.                                        |
 
 #### FLUX.2-klein (RunPod Serverless)
@@ -227,7 +231,7 @@ Create Video validation is enforced before fal.ai submission. Reference images m
 Submits an image generation job. Handles AI prompt engineering via Gemini or RunPod Qwen, then routes to the selected model backend.
 
 - **FLUX.1-dev**: Submits to RunningHub workflow. Returns `{ taskId, model: 'flux-dev', prompt }`.
-- **Z-Image**: Submits to RunPod Z-Image Serverless endpoint with multi-LoRA `loras` array. Returns `{ jobId, model: 'z-image', prompt }`.
+- **Z-Image**: Submits to RunPod Z-Image Serverless endpoint with multi-LoRA `loras` array, Base-model defaults (`steps=50`, `shift=1.0`, `cfg_normalization=true`), RealPLKSR detail upscale controls, and optional img2img hires-fix controls. Returns `{ jobId, model: 'z-image', prompt }`.
 - **FLUX.2-klein**: Submits to RunPod FLUX.2-klein Serverless endpoint with preset, explicit `width`/`height` from the selected aspect ratio, multi-LoRA `loras`, `lora_scale_mode`, `max_sequence_length`, optional 2nd pass options, and optional upscale options. Returns `{ jobId, model: 'flux-klein', prompt }`.
 
 ### `POST /api/zimage-check`

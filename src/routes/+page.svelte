@@ -28,13 +28,13 @@
     let apiKeysOpen = $state(!(_gk && _rk)); // open only when keys are missing
 
     // Z-Image / FLUX.2-klein extra params
-    let zimageSteps = $state(40);
+    let zimageSteps = $state(50);
     let guidanceScale = $state(4.5);
     let zimageSeed = $state(-1);
     let loraScale = $state(0.85);
     let fluxDevSeed = $state(0);
     let fluxDevLoraStrength = $state(1);
-    let shift = $state(3.0);
+    let shift = $state(1.0);
     let preset = $state('realistic_character');
 
     // Z-Image new params
@@ -44,9 +44,11 @@
     let zimageCfgNormalization = $state(true);
     let zimageCfgTruncation = $state(1.0);
     let zimageVaeTiling = $state<boolean | null>(null); // null = auto
+    let zimageUpscaleEnabled = $state(true);
+    let zimageUpscaleFactor = $state(1.5);
 
     // Z-Image second pass params
-    let secondPassEnabled = $state(true);
+    let secondPassEnabled = $state(false);
     let secondPassUpscale = $state(1.25);
     let secondPassStrength = $state(0.42);
     let secondPassGuidanceScale = $state(4.5);
@@ -371,6 +373,8 @@
             zimage_cfg_normalization: zimageCfgNormalization,
             zimage_cfg_truncation: zimageCfgTruncation,
             zimage_vae_tiling: zimageVaeTiling,
+            upscale_enabled: zimageUpscaleEnabled,
+            upscale_factor: zimageUpscaleFactor,
             second_pass_enabled: secondPassEnabled,
             second_pass_upscale: secondPassUpscale,
             second_pass_strength: secondPassStrength,
@@ -1594,6 +1598,7 @@
                             <div class="field">
                                 <label for="zimageSteps">Inference Steps</label>
                                 <input type="number" id="zimageSteps" bind:value={zimageSteps} min="10" max="100" />
+                                <p class="field-hint">50 is the current Base sweet spot. Use fewer steps only for faster previews.</p>
                             </div>
                             <div class="field">
                                 <label for="guidanceScale">Guidance Scale</label>
@@ -1602,7 +1607,7 @@
                             <div class="field">
                                 <label for="shift">Scheduler Shift</label>
                                 <input type="number" id="shift" bind:value={shift} min="0.5" max="10" step="0.1" />
-                                <p class="field-hint">3.0 is the current Z-Image default for stronger global composition. Lower values preserve finer detail; higher values lean more creative.</p>
+                                <p class="field-hint">1.0 matches the Z-Image scheduler default and preserves detail refinement. Raise only for specialized LoRAs.</p>
                             </div>
                             <div class="field">
                                 <label for="zimageMaxSequenceLength">Prompt Length Limit (tokens)</label>
@@ -1749,14 +1754,35 @@
                             </div>
                         </details>
 
+                        <div class="field toggle-field" style="margin-top: 12px;">
+                            <label for="zimageUpscaleEnabled" class="toggle-label">
+                                <span class="toggle-text">RealPLKSR Detail Upscale</span>
+                                <input type="checkbox" id="zimageUpscaleEnabled" bind:checked={zimageUpscaleEnabled} class="toggle-checkbox" disabled={secondPassEnabled} />
+                                <span class="toggle-slider-ui"></span>
+                            </label>
+                            <p class="toggle-description">
+                                Default ON. Pure super-resolution with no diffusion repaint. Disabled automatically when img2img hires-fix is enabled.
+                            </p>
+                        </div>
+
+                        {#if zimageUpscaleEnabled && !secondPassEnabled}
+                            <div class="grid second-pass-params">
+                                <div class="field">
+                                    <label for="zimageUpscaleFactor">Detail Upscale Factor</label>
+                                    <input type="number" id="zimageUpscaleFactor" bind:value={zimageUpscaleFactor} min="1" max="4" step="0.05" />
+                                    <p class="field-hint">1.5 returns 1536x1536 from a 1024x1024 generation.</p>
+                                </div>
+                            </div>
+                        {/if}
+
                         <!-- Second Pass Options -->
                         <div class="field toggle-field" style="margin-top: 12px;">
                             <label for="secondPassEnabled" class="toggle-label">
-                                <span class="toggle-text">Enable High-Res Refinement</span>
+                                <span class="toggle-text">Enable img2img Hires-Fix</span>
                                 <input type="checkbox" id="secondPassEnabled" bind:checked={secondPassEnabled} class="toggle-checkbox" />
                                 <span class="toggle-slider-ui"></span>
                             </label>
-                            <p class="toggle-description">Runs a second pass for extra detail and upscaling</p>
+                            <p class="toggle-description">Opt-in upscale plus re-diffusion for heavy stylistic refinement. This can smooth fine texture and replaces the default detail upscale.</p>
                         </div>
 
                         {#if secondPassEnabled}

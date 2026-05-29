@@ -27,11 +27,11 @@ export const POST: RequestHandler = async ({ request }) => {
     // FLUX.2-klein multi-LoRA stack (array of { url, keyword, scale })
     kleinLoras = [],
     // Z-Image / FLUX.2-klein extra params
-    steps = 40,
+    steps = 50,
     guidanceScale = 4.5,
     seed = -1,
     loraScale = 0.85,
-    shift = 3.0,
+    shift = 1.0,
     preset = "realistic_character",
     // Z-Image new params
     zimage_negative_prompt = "",
@@ -40,8 +40,10 @@ export const POST: RequestHandler = async ({ request }) => {
     zimage_cfg_normalization = true,
     zimage_cfg_truncation = 1.0,
     zimage_vae_tiling = null,
+    upscale_enabled = true,
+    upscale_factor = 1.5,
     // Z-Image second pass params
-    second_pass_enabled = true,
+    second_pass_enabled = false,
     second_pass_upscale = 1.25,
     second_pass_strength = 0.42,
     second_pass_guidance_scale = 4.5,
@@ -416,21 +418,27 @@ RULES:
             cfg_normalization: zimage_cfg_normalization,
             cfg_truncation: zimage_cfg_truncation,
             ...(zimage_vae_tiling !== null ? { vae_tiling: zimage_vae_tiling } : {}),
+            upscale_enabled: second_pass_enabled ? false : upscale_enabled,
+            upscale_factor,
             ...lorasPayload,
             second_pass_enabled,
-            second_pass_upscale,
-            second_pass_strength,
-            second_pass_steps,
-            second_pass_guidance_scale,
-            ...(second_pass_seed !== null ? { second_pass_seed } : {}),
-            second_pass_max_sequence_length,
-            second_pass_cfg_normalization,
-            second_pass_cfg_truncation,
-            ...(second_pass_use_beta_sigmas !== null
-              ? { second_pass_use_beta_sigmas }
+            ...(second_pass_enabled
+              ? {
+                  second_pass_upscale,
+                  second_pass_strength,
+                  second_pass_steps,
+                  second_pass_guidance_scale,
+                  ...(second_pass_seed !== null ? { second_pass_seed } : {}),
+                  second_pass_max_sequence_length,
+                  second_pass_cfg_normalization,
+                  second_pass_cfg_truncation,
+                  ...(second_pass_use_beta_sigmas !== null
+                    ? { second_pass_use_beta_sigmas }
+                    : {}),
+                  second_pass_vae_tiling,
+                  second_pass_vae_slicing,
+                }
               : {}),
-            second_pass_vae_tiling,
-            second_pass_vae_slicing,
           },
         }),
       });
