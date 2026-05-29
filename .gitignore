@@ -15,6 +15,7 @@ civitai_flux2_klein_9b_triggers.json
 civitai_flux2_klein_9b_triggers.py
 .codex
 .codemap/
+.codegraph/
 .antigravitycli/
 Screenshot*.png
 .claude
