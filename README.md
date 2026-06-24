@@ -143,6 +143,8 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | `S3_SECRET_ACCESS_KEY`       | For Upscaling & RunningHub Enhance uploads      | S3 secret access key                                                |
 | `S3_REGION`                  | For Upscaling & RunningHub Enhance uploads      | S3 region (default: `us-east-1`)                                    |
 | `BODY_SIZE_LIMIT`            | Always                                          | Maximum upload size in bytes (e.g., `52428800` for 50MB)            |
+| `SITE_PASSWORD`              | Always                                          | Password required to access the web UI                              |
+| `COOKIE_SECRET`              | Always                                          | Secret used to sign the session cookie — generate with `openssl rand -hex 32` |
 
 ### Web UI Settings
 
@@ -280,9 +282,12 @@ rhub/
 │   │   ├── tt-encoder.ts             # LSB Steganography embedding
 │   │   ├── s3.ts                     # S3 Client & Presigned URL logic
 │   │   └── locations.ts              # 300 photogenic locations
+│   ├── hooks.server.ts               # Auth guard — redirects unauthenticated requests to /login
 │   └── routes/
 │       ├── +page.svelte              # Main UI (Runes) — Generate, Upscale, Enhance & Create Video tabs
 │       ├── +page.server.ts           # Server load — passes env-backed API keys + LoRA lists to UI
+│       ├── login/                    # Login page (password form + signed-cookie session)
+│       ├── logout/                   # GET /logout — clears session cookie
 │       └── api/
 │           ├── generate/             # AI Synthesis + Multi-model Submission
 │           ├── zimage-check/         # RunPod job polling + image download (Z-Image & FLUX.2-klein)
