@@ -366,7 +366,7 @@
             loraKeyword: (model === 'flux-klein' || model === 'z-image')
                 ? kleinLoras.map(l => l.keyword).map(k => k.trim()).filter(Boolean).join(', ')
                 : loraKeyword,
-            kleinLoras: (model === 'flux-klein' || model === 'z-image') ? kleinLoras : undefined,
+            kleinLoras: (model === 'flux-klein' || model === 'z-image') ? kleinLoras.map(l => ({ ...l })) : undefined,
             subject,
             customPrompt,
             useCustomPrompt,
