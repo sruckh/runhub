@@ -22,3 +22,8 @@ Screenshot*.png
 .claude
 .claude/
 .goals/
+
+# Editor cruft
+*.swp
+*.swo
+*~

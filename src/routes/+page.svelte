@@ -34,7 +34,7 @@
     let loraScale = $state(0.85);
     let fluxDevSeed = $state(0);
     let fluxDevLoraStrength = $state(1);
-    let shift = $state(1.0);
+    let shift = $state<number | null>(null); // null = use backend checkpoint default (6.0 base / 3.0 turbo)
     let preset = $state('realistic_character');
 
     // Z-Image new params
@@ -384,7 +384,7 @@
             loraScale,
             flux_dev_seed: fluxDevSeed,
             flux_dev_lora_strength: fluxDevLoraStrength,
-            shift,
+            ...(shift !== null ? { shift } : {}),
             preset,
             zimage_negative_prompt: zimageNegativePrompt,
             zimage_max_sequence_length: zimageMaxSequenceLength,
@@ -1626,8 +1626,15 @@
                             </div>
                             <div class="field">
                                 <label for="shift">Scheduler Shift</label>
-                                <input type="number" id="shift" bind:value={shift} min="0.5" max="10" step="0.1" />
-                                <p class="field-hint">1.0 matches the Z-Image scheduler default and preserves detail refinement. Raise only for specialized LoRAs.</p>
+                                <input type="number" id="shift"
+                                    value={shift === null ? '' : shift}
+                                    placeholder="Backend default (6.0 base / 3.0 turbo)"
+                                    oninput={(e) => {
+                                        const v = (e.target as HTMLInputElement).value;
+                                        shift = v === '' ? null : Number(v);
+                                    }}
+                                    min="0.5" max="10" step="0.1" />
+                                <p class="field-hint">Leave blank to use the backend checkpoint default (6.0 Z-Image base, 3.0 Turbo). Set only for specialized LoRAs.</p>
                             </div>
                             <div class="field">
                                 <label for="zimageMaxSequenceLength">Prompt Length Limit (tokens)</label>

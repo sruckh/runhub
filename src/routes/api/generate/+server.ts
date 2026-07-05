@@ -31,7 +31,7 @@ export const POST: RequestHandler = async ({ request }) => {
     guidanceScale = 4.5,
     seed = -1,
     loraScale = 0.85,
-    shift = 1.0,
+    shift = null,
     preset = "realistic_character",
     // Z-Image new params
     zimage_negative_prompt = "",
@@ -413,7 +413,7 @@ RULES:
             steps,
             guidance_scale: guidanceScale,
             seed: effectiveSeed,
-            shift,
+            ...(shift !== null ? { shift } : {}),
             max_sequence_length: zimage_max_sequence_length,
             use_beta_sigmas: zimage_use_beta_sigmas,
             cfg_normalization: zimage_cfg_normalization,

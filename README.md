@@ -175,7 +175,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | -------------------------- | ---------------- | --------------------------------------------------------------------------------- |
 | Inference Steps            | `50`             | Number of diffusion steps. 50 is the current upstream Base-model sweet spot for detail. |
 | Guidance Scale             | `4.5`            | CFG scale. 4.5 is the current photorealism default; higher increases adherence but can over-saturate. |
-| Scheduler Shift            | `1.0`            | FlowMatch scheduler shift. 1.0 matches the Z-Image architecture/scheduler default and preserves detail refinement. Raise only when a specialized LoRA requires it. |
+| Scheduler Shift            | blank (backend default) | FlowMatch scheduler shift. Leave blank to use the backend checkpoint default (6.0 Z-Image base, 3.0 Z-Image-Turbo). Set only when a specialized LoRA requires it. |
 | CFG Normalization          | on               | Enabled by default per the official Tongyi-MAI photorealism recommendation. |
 | CFG Truncation             | `1.0`            | Recommended default. Lower values can reduce over-saturation. |
 | Beta Sigmas                | off              | Disabled by default to match the official Z-Image noise distribution. |
@@ -204,7 +204,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | Enable Detail Refinement   | off                   | Runs a second inference pass to sharpen fine details and textures.                                                                                                                                                                                                |
 | ↳ Refinement Strength      | `0.2`                 | Img2img denoising strength for the refinement pass.                                                                                                                                                                                                               |
 | ↳ Refinement Steps         | `4`                   | Inference steps for the refinement pass. The serverless worker clamps this to `1..8`.                                                                                                                                                                            |
-| ↳ Refinement Guidance      | `1.0` (server-forced) | The serverless worker forces `second_pass_guidance_scale` to `1.0`; rhub does not send this field.                                                                                                                                                               |
+| ↳ Refinement Guidance      | —                     | The FLUX.2-klein refinement pass exposes Strength and Steps only; rhub sends no separate guidance field for it.                                                                                                                                                               |
 | ↳ Refinement LoRA Strength | —                     | Not applicable. LoRAs are fused into model weights at init time, so there is no per-pass LoRA scale multiplier.                                                                                                                                                 |
 | Enable Upscaling           | off                   | Upscales the generated image server-side before delivery.                                                                                                                                                                                                         |
 | ↳ Upscale Factor           | `2.0`                 | Scale multiplier (0.25–4×).                                                                                                                                                                                                                                       |
@@ -236,7 +236,7 @@ Create Video validation is enforced before fal.ai submission. Reference images m
 Submits an image generation job. Handles AI prompt engineering via Gemini or RunPod Qwen, then routes to the selected model backend.
 
 - **FLUX.1-dev**: Submits to RunningHub workflow. Returns `{ taskId, model: 'flux-dev', prompt }`.
-- **Z-Image**: Submits to RunPod Z-Image Serverless endpoint with multi-LoRA `loras` array, Base-model defaults (`steps=50`, `shift=1.0`, `cfg_normalization=true`), selectable `upscale_model`, default img2img hires-fix controls, and fallback single-pass detail upscale controls. Returns `{ jobId, model: 'z-image', prompt }`.
+- **Z-Image**: Submits to RunPod Z-Image Serverless endpoint with multi-LoRA `loras` array, Base-model defaults (`steps=50`, `cfg_normalization=true`), `shift` left unset so the backend checkpoint default applies (6.0 base / 3.0 turbo), selectable `upscale_model`, default img2img hires-fix controls, and fallback single-pass detail upscale controls. Returns `{ jobId, model: 'z-image', prompt }`.
 - **FLUX.2-klein**: Submits to RunPod FLUX.2-klein Serverless endpoint with preset, explicit `width`/`height` from the selected aspect ratio, multi-LoRA `loras`, `lora_scale_mode`, `max_sequence_length`, optional 2nd pass options, and optional upscale options. Returns `{ jobId, model: 'flux-klein', prompt }`.
 
 ### `POST /api/zimage-check`
