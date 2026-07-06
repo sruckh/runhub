@@ -121,6 +121,20 @@
     let rhubKleinAspectRatio = $state('1:1');
     let rhubKleinOrientation = $state('portrait');
 
+    // RunningHub Krea2 Kim params (fixed LoRA; trigger K1mScum enforced server-side)
+    let kimLoraStrength = $state(1);
+    let kimAspectRatio = $state('1:1 (Square)');
+    const kimAspectRatios = [
+        '1:1 (Square)',
+        '2:3 (Portrait Photo)',
+        '3:2 (Photo)',
+        '3:4 (Portrait Standard)',
+        '4:3 (Standard)',
+        '9:16 (Portrait Widescreen)',
+        '16:9 (Widescreen)',
+        '21:9 (Ultrawide)'
+    ];
+
     const rhubKleinWorkflows = [
         { id: 'standard', label: 'Standard' },
         { id: 'upscale', label: 'Upscale' },
@@ -375,7 +389,7 @@
             rhubKey,
             runpodKey,
             promptProvider,
-            useTtDecoder,
+            useTtDecoder: model === 'rhub-krea2-kim' ? true : useTtDecoder,
             outputDir,
             prefix,
             steps: zimageSteps,
@@ -425,6 +439,8 @@
             rhub_klein_lora1_url: loraUrl.trim(),
             rhub_klein_aspect_ratio: rhubKleinAspectRatio,
             rhub_klein_orientation: rhubKleinOrientation,
+            kim_lora_strength: kimLoraStrength,
+            kim_aspect_ratio: kimAspectRatio,
             createdAt: new Date().toISOString()
         };
 
@@ -680,8 +696,8 @@
 
     async function pollTask(resultId: string, taskId: string, payload: any) {
         const { rhubKey, outputDir, prefix, useTtDecoder, model } = payload;
-        // rhub-klein workflow always returns tt-encoded images
-        const effectiveTtDecoder = model === 'rhub-klein' ? true : useTtDecoder;
+        // rhub-klein and rhub-krea2-kim workflows always return tt-encoded images
+        const effectiveTtDecoder = (model === 'rhub-klein' || model === 'rhub-krea2-kim') ? true : useTtDecoder;
 
         while (!isCancelled) {
             try {
@@ -1371,7 +1387,7 @@
                 <div class="settings-header">
                     <h2>Generation Settings</h2>
                     <span class="settings-badge">
-                        {#if model === 'flux-dev'}FLUX.1-dev{:else if model === 'flux-klein'}FLUX.2-klein{:else if model === 'rhub-zimage'}ZImage Upscale{:else if model === 'rhub-klein'}FLUX.2-klein (RH){:else}Z-Image{/if}
+                        {#if model === 'flux-dev'}FLUX.1-dev{:else if model === 'flux-klein'}FLUX.2-klein{:else if model === 'rhub-zimage'}ZImage Upscale{:else if model === 'rhub-klein'}FLUX.2-klein (RH){:else if model === 'rhub-krea2-kim'}Krea2 Kim{:else}Z-Image{/if}
                     </span>
                 </div>
 
@@ -1386,6 +1402,7 @@
                         <optgroup label="RunningHub">
                             <option value="rhub-klein">FLUX.2-klein (quality)</option>
                             <option value="flux-dev">FLUX.1-dev</option>
+                            <option value="rhub-krea2-kim">Krea2 Kim</option>
                             <option value="rhub-zimage">ZImage Upscale</option>
                         </optgroup>
                     </select>
@@ -1437,7 +1454,7 @@
                             </div>
                         {/each}
                     </div>
-                {:else if model !== 'rhub-klein'}
+                {:else if model !== 'rhub-klein' && model !== 'rhub-krea2-kim'}
                     <div class="grid">
                         <div class="field">
                             <label for="loraUrl">LoRA URL</label>
@@ -1553,6 +1570,22 @@
                         <label for="zimageSeed">Seed (−1 = random)</label>
                         <input type="number" id="zimageSeed" bind:value={zimageSeed} min="-1" />
                     </div>
+                {/if}
+
+                {#if model === 'rhub-krea2-kim'}
+                    <div class="field">
+                        <label for="kimLoraStrength">LoRA Strength</label>
+                        <input type="number" id="kimLoraStrength" bind:value={kimLoraStrength} min="0" max="2" step="0.05" />
+                    </div>
+                    <div class="field">
+                        <label for="kimAspectRatio">Aspect Ratio</label>
+                        <select id="kimAspectRatio" bind:value={kimAspectRatio}>
+                            {#each kimAspectRatios as ar}
+                                <option value={ar}>{ar}</option>
+                            {/each}
+                        </select>
+                    </div>
+                    <p class="toggle-description">Fixed LoRA (K1mScum). The trigger word is added to every prompt automatically; results are TT-decoded before saving.</p>
                 {/if}
 
                 {#if model === 'rhub-klein'}
@@ -2233,7 +2266,7 @@
 
         <div class="actions">
             <button class="btn-primary main-action" onclick={handleSubmit}>
-                {activeTab === 'enhance' ? 'Add Enhance to Queue' : activeTab === 'upscale' ? 'Add Upscale to Queue' : activeTab === 'video' ? 'Add Video to Queue' : (model === 'flux-dev' ? 'Add Generation to Queue' : model === 'rhub-zimage' ? 'Add ZImage Upscale to Queue' : model === 'rhub-klein' ? 'Add FLUX.2-klein to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`)}
+                {activeTab === 'enhance' ? 'Add Enhance to Queue' : activeTab === 'upscale' ? 'Add Upscale to Queue' : activeTab === 'video' ? 'Add Video to Queue' : (model === 'flux-dev' ? 'Add Generation to Queue' : model === 'rhub-zimage' ? 'Add ZImage Upscale to Queue' : model === 'rhub-klein' ? 'Add FLUX.2-klein to Queue' : model === 'rhub-krea2-kim' ? 'Add Krea2 Kim to Queue' : `Add ${model === 'flux-klein' ? 'FLUX.2-klein' : 'Z-Image'} to Queue`)}
             </button>
             <div class="action-grid">
                 {#if loading}
@@ -2263,7 +2296,7 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'enhance'}Enhance{:else if task.type === 'video'}Video{:else if task.type === 'upscale'}{task.upscaleEngine === 'runninghub-api' ? 'Upscale (API)' : 'Upscale 2K'}{:else if task.model === 'flux-klein'}Klein · {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-Image · {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZImage · {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}Klein (RH {task.rhub_klein_workflow === 'upscale' ? 'Upscale' : 'Standard'}) · {task.rhub_klein_aspect_ratio} {task.rhub_klein_orientation === 'landscape' ? 'Landscape' : 'Portrait'}{:else}FLUX.1-dev · {task.aspectRatio}{/if}
+                                {#if task.type === 'enhance'}Enhance{:else if task.type === 'video'}Video{:else if task.type === 'upscale'}{task.upscaleEngine === 'runninghub-api' ? 'Upscale (API)' : 'Upscale 2K'}{:else if task.model === 'flux-klein'}Klein · {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-Image · {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZImage · {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}Klein (RH {task.rhub_klein_workflow === 'upscale' ? 'Upscale' : 'Standard'}) · {task.rhub_klein_aspect_ratio} {task.rhub_klein_orientation === 'landscape' ? 'Landscape' : 'Portrait'}{:else if task.model === 'rhub-krea2-kim'}Krea2 Kim · {task.kim_aspect_ratio}{:else}FLUX.1-dev · {task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'enhance'}

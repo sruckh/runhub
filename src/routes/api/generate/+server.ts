@@ -76,6 +76,9 @@ export const POST: RequestHandler = async ({ request }) => {
     rhub_klein_lora1_url = "",
     rhub_klein_aspect_ratio = "1:1",
     rhub_klein_orientation = "portrait",
+    // RunningHub Krea2 Kim params (fixed LoRA; trigger K1mScum is forced below)
+    kim_lora_strength = 1,
+    kim_aspect_ratio = "1:1 (Square)",
   } = await request.json();
 
   // Resolve keys: user input overrides env vars
@@ -687,6 +690,76 @@ RULES:
         throw new Error(`RunningHub Klein submission failed: ${JSON.stringify(kleinSubmitData)}`);
 
       return json({ taskId: kleinSubmitData.taskId, model: "rhub-klein", prompt: finalPrompt });
+    }
+
+    // ── Krea2 Kim via RunningHub ───────────────────────────────────────────
+    if (model === "rhub-krea2-kim") {
+      // The workflow's LoRA is fixed; its trigger word (K1mScum) MUST be present
+      // in every prompt. Inject it if the user didn't include it.
+      const kimPrompt = /K1mScum/i.test(finalPrompt)
+        ? finalPrompt
+        : `K1mScum ${finalPrompt}`.trim();
+
+      const kimLoraStrength =
+        typeof kim_lora_strength === "number" && Number.isFinite(kim_lora_strength)
+          ? kim_lora_strength
+          : 1;
+
+      const kimAspectRatioOptions = [
+        "1:1 (Square)",
+        "2:3 (Portrait Photo)",
+        "3:2 (Photo)",
+        "3:4 (Portrait Standard)",
+        "4:3 (Standard)",
+        "9:16 (Portrait Widescreen)",
+        "16:9 (Widescreen)",
+        "21:9 (Ultrawide)",
+      ];
+      const kimAspectRatio = kimAspectRatioOptions.includes(kim_aspect_ratio)
+        ? kim_aspect_ratio
+        : "1:1 (Square)";
+
+      console.log(
+        `[RHUB-Krea2Kim] Submitting aspect="${kimAspectRatio}" loraStrength=${kimLoraStrength}`,
+      );
+      console.log(`[RHUB-Krea2Kim] Prompt (first 80): ${kimPrompt.substring(0, 80)}`);
+
+      const rhubKimPayload = {
+        nodeInfoList: [
+          { nodeId: "81", fieldName: "value", fieldValue: kimPrompt, description: "Prompt" },
+          {
+            nodeId: "82",
+            fieldName: "strength_model",
+            fieldValue: kimLoraStrength,
+            description: "LoRA Strength",
+          },
+          {
+            nodeId: "49",
+            fieldName: "aspect_ratio",
+            fieldData:
+              '["COMBO", {"default": "1:1 (Square)", "options": ["1:1 (Square)", "2:3 (Portrait Photo)", "3:2 (Photo)", "3:4 (Portrait Standard)", "4:3 (Standard)", "9:16 (Portrait Widescreen)", "16:9 (Widescreen)", "21:9 (Ultrawide)"], "tooltip": "The aspect ratio for the output dimensions.", "multiselect": false}]',
+            fieldValue: kimAspectRatio,
+            description: "Aspect Ratio",
+          },
+        ],
+        instanceType: "default",
+        usePersonalQueue: "false",
+      };
+
+      const rhubKimResponse = await fetch(
+        "https://www.runninghub.ai/openapi/v2/run/ai-app/2073899469871075329",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${rhubKey}` },
+          body: JSON.stringify(rhubKimPayload),
+        },
+      );
+
+      const kimSubmitData = await rhubKimResponse.json();
+      if (!kimSubmitData.taskId)
+        throw new Error(`RunningHub Krea2 Kim submission failed: ${JSON.stringify(kimSubmitData)}`);
+
+      return json({ taskId: kimSubmitData.taskId, model: "rhub-krea2-kim", prompt: kimPrompt });
     }
 
     // ── FLUX.1-dev via RunningHub ──────────────────────────────────────────
