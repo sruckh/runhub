@@ -130,9 +130,12 @@
         '3:2 (Photo)',
         '3:4 (Portrait Standard)',
         '4:3 (Standard)',
+        '4:5 (Portrait)',
+        '5:4 (Landscape)',
         '9:16 (Portrait Widescreen)',
         '16:9 (Widescreen)',
-        '21:9 (Ultrawide)'
+        '21:9 (Ultrawide)',
+        '1.91:1 (Facebook/LinkedIn)'
     ];
 
     const rhubKleinWorkflows = [
@@ -475,6 +478,7 @@
                 type: 'upscale',
                 id,
                 rhubKey,
+                falKey,
                 useTtDecoder,
                 upscaleEngine,
                 outputDir,
@@ -673,8 +677,11 @@
             const formData = new FormData();
             formData.append('image', file);
             formData.append('rhubKey', task.rhubKey);
+            formData.append('falKey', task.falKey);
             formData.append('useTtDecoder', String(task.useTtDecoder));
             formData.append('upscaleEngine', task.upscaleEngine || 'runninghub-2k');
+            formData.append('outputDir', task.outputDir);
+            formData.append('prefix', task.prefix);
 
             const response = await fetch('/api/upscale', {
                 method: 'POST',
@@ -684,10 +691,12 @@
             const data = await response.json();
             if (data.error) throw new Error(data.error);
 
-            const taskId = data.taskId;
-            updateResult(resultId, { status: 'PROCESSING', taskId });
-
-            await pollTask(resultId, taskId, task);
+            if (data.taskId) {
+                updateResult(resultId, { status: 'PROCESSING', taskId: data.taskId });
+                await pollTask(resultId, data.taskId, task);
+            } else {
+                updateResult(resultId, { status: 'SUCCESS', filename: data.filename, ts: Date.now() });
+            }
 
         } catch (e: any) {
             updateResult(resultId, { status: 'FAILED', error: e.message });
@@ -1938,15 +1947,22 @@
             {:else if activeTab === 'upscale'}
                 <div class="settings-header">
                     <h2>Upscale Settings</h2>
-                    <span class="settings-badge">{upscaleEngine === 'runninghub-api' ? 'RunningHub API' : '2K Resolution'}</span>
+                    <span class="settings-badge">{upscaleEngine === 'runninghub-api' ? 'RunningHub API' : upscaleEngine === 'fal-crystal' ? 'FAL Crystal' : '2K Resolution'}</span>
                 </div>
                 <div class="field">
                     <label for="upscaleEngine">Upscale Engine</label>
                     <select id="upscaleEngine" bind:value={upscaleEngine}>
                         <option value="runninghub-2k">RunningHub — 2K Upscale</option>
                         <option value="runninghub-api">RunningHub — API Upscale</option>
+                        <option value="fal-crystal">FAL — Crystal Upscaler</option>
                     </select>
                 </div>
+                {#if upscaleEngine === 'fal-crystal'}
+                <div class="field">
+                    <label for="upscaleFalKey">fal.ai API Key</label>
+                    <input type="password" id="upscaleFalKey" bind:value={falKey} placeholder="Enter fal.ai Key" />
+                </div>
+                {:else}
                 <div class="field toggle-field">
                     <label for="useTtDecoderUpscale" class="toggle-label">
                         <span class="toggle-text">Enable TT-Decoder</span>
@@ -1955,6 +1971,7 @@
                     </label>
                     <p class="toggle-description">Decode hidden files from upscaled images</p>
                 </div>
+                {/if}
 
                 <div class="field">
                     <label for="fileUploadInput">Upload Images</label>
@@ -2296,7 +2313,7 @@
                     <div class="queue-item">
                         <div class="queue-info">
                             <span class="queue-tag">
-                                {#if task.type === 'enhance'}Enhance{:else if task.type === 'video'}Video{:else if task.type === 'upscale'}{task.upscaleEngine === 'runninghub-api' ? 'Upscale (API)' : 'Upscale 2K'}{:else if task.model === 'flux-klein'}Klein · {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-Image · {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZImage · {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}Klein (RH {task.rhub_klein_workflow === 'upscale' ? 'Upscale' : 'Standard'}) · {task.rhub_klein_aspect_ratio} {task.rhub_klein_orientation === 'landscape' ? 'Landscape' : 'Portrait'}{:else if task.model === 'rhub-krea2-kim'}Krea2 Kim · {task.kim_aspect_ratio}{:else}FLUX.1-dev · {task.aspectRatio}{/if}
+                                {#if task.type === 'enhance'}Enhance{:else if task.type === 'video'}Video{:else if task.type === 'upscale'}{task.upscaleEngine === 'runninghub-api' ? 'Upscale (API)' : task.upscaleEngine === 'fal-crystal' ? 'Upscale (FAL)' : 'Upscale 2K'}{:else if task.model === 'flux-klein'}Klein · {task.kleinAspectRatio ?? task.aspectRatio}{:else if task.model === 'z-image'}Z-Image · {task.aspectRatio}{:else if task.model === 'rhub-zimage'}ZImage · {task.rhub_zimage_width}×{task.rhub_zimage_height}{:else if task.model === 'rhub-klein'}Klein (RH {task.rhub_klein_workflow === 'upscale' ? 'Upscale' : 'Standard'}) · {task.rhub_klein_aspect_ratio} {task.rhub_klein_orientation === 'landscape' ? 'Landscape' : 'Portrait'}{:else if task.model === 'rhub-krea2-kim'}Krea2 Kim · {task.kim_aspect_ratio}{:else}FLUX.1-dev · {task.aspectRatio}{/if}
                             </span>
                             <span class="queue-prompt">
                                 {#if task.type === 'enhance'}

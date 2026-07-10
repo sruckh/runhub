@@ -3,6 +3,10 @@ import type { RequestHandler } from "./$types";
 import { uploadAndGetPresignedUrl } from "$lib/s3";
 import { env } from "$env/dynamic/private";
 import { encodeImage } from "$lib/tt-encoder";
+import fs from "fs/promises";
+import path from "path";
+
+const MOUNT_PATH = "/mount";
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
@@ -12,6 +16,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const rhubKey = userRhubKey || env.RUNNINGHUB_API_KEY || "";
     const useTtDecoder = formData.get("useTtDecoder") === "true";
     const upscaleEngine = (formData.get("upscaleEngine") as string) || "runninghub-2k";
+    const isFalCrystal = upscaleEngine === "fal-crystal";
 
     // S3 Config from Environment Variables
     const s3Endpoint = env.S3_ENDPOINT;
@@ -20,7 +25,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const s3Bucket = env.S3_BUCKET;
     const s3Region = env.S3_REGION || "us-east-1";
 
-    if (!image || !rhubKey) {
+    if (!image || (!isFalCrystal && !rhubKey)) {
       return json(
         { error: "Missing required parameters (Image or RunningHub Key)" },
         { status: 400 },
@@ -37,7 +42,7 @@ export const POST: RequestHandler = async ({ request }) => {
     let buffer: Buffer = Buffer.from(await image.arrayBuffer());
     let finalFileName = `upscale_${Date.now()}_${image.name}`;
 
-    if (useTtDecoder) {
+    if (useTtDecoder && !isFalCrystal) {
       console.log(`[Upscale] useTtDecoder is ON. Encoding image...`);
       const extension = image.name.split(".").pop() || "png";
       buffer = encodeImage(buffer, extension);
@@ -57,6 +62,54 @@ export const POST: RequestHandler = async ({ request }) => {
       buffer,
       finalFileName,
     );
+
+    if (isFalCrystal) {
+      const userFalKey = formData.get("falKey") as string;
+      const falKey = userFalKey || env.FAL_KEY || "";
+      const outputDir = (formData.get("outputDir") as string) || "generations";
+      const prefix = (formData.get("prefix") as string) || "image";
+
+      if (!falKey) {
+        return json({ error: "fal.ai API Key is required" }, { status: 400 });
+      }
+
+      console.log(`[Upscale] Calling fal.ai clarityai/crystal-upscaler...`);
+      const falResponse = await fetch("https://fal.run/clarityai/crystal-upscaler", {
+        method: "POST",
+        headers: {
+          Authorization: `Key ${falKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ image_url: imageUrl, output_format: "png" }),
+      });
+
+      if (!falResponse.ok) {
+        const errorText = await falResponse.text();
+        console.error(`[Upscale] fal.ai error: ${falResponse.status} ${errorText}`);
+        throw new Error(`fal.ai API error: ${falResponse.status}`);
+      }
+
+      const falData = await falResponse.json();
+      const resultImageUrl = falData?.images?.[0]?.url;
+      if (!resultImageUrl) throw new Error("No image URL in fal.ai response");
+
+      console.log(`[Upscale] Got result URL: ${resultImageUrl}`);
+
+      const fullOutputDir = path.join(MOUNT_PATH, outputDir);
+      await fs.mkdir(fullOutputDir, { recursive: true });
+
+      const imageRes = await fetch(resultImageUrl);
+      if (!imageRes.ok)
+        throw new Error(`Failed to download upscaled image: ${imageRes.status}`);
+      const arrayBuffer = await imageRes.arrayBuffer();
+      const imageBuffer = Buffer.from(arrayBuffer);
+
+      const filename = await getNextFilename(fullOutputDir, prefix, "png");
+      await fs.writeFile(path.join(fullOutputDir, filename), imageBuffer);
+      console.log(`[Upscale] Saved: ${filename}`);
+
+      return json({ filename });
+    }
 
     console.log(`[Upscale] Presigned URL generated. Submitting to RunningHub...`);
 
@@ -109,3 +162,24 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ error: err.message }, { status: 500 });
   }
 };
+
+
+async function getNextFilename(
+  dir: string,
+  prefix: string,
+  extension: string,
+): Promise<string> {
+  const files = await fs.readdir(dir);
+  const regex = new RegExp(
+    `^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}_(\\d{3})\\.${extension}$`,
+  );
+  let maxNum = 0;
+  for (const file of files) {
+    const match = file.match(regex);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  return `${prefix}_${String(maxNum + 1).padStart(3, "0")}.${extension}`;
+}

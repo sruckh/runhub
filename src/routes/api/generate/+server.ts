@@ -705,22 +705,48 @@ RULES:
           ? kim_lora_strength
           : 1;
 
+      // Krea2 Kim takes explicit width/height (nodeId 148/149). The UI still
+      // exposes an aspect-ratio dropdown; resolve it to pixels here, mirroring
+      // the other RHUB services (long side ~1024). Both dims are forced to be
+      // divisible by 8 (see the rounding below) — a hard requirement of the
+      // workflow.
       const kimAspectRatioOptions = [
         "1:1 (Square)",
         "2:3 (Portrait Photo)",
         "3:2 (Photo)",
         "3:4 (Portrait Standard)",
         "4:3 (Standard)",
+        "4:5 (Portrait)",
+        "5:4 (Landscape)",
         "9:16 (Portrait Widescreen)",
         "16:9 (Widescreen)",
         "21:9 (Ultrawide)",
+        "1.91:1 (Facebook/LinkedIn)",
       ];
+      const kimDimensions: Record<string, { width: number; height: number }> = {
+        "1:1 (Square)": { width: 1024, height: 1024 },
+        "2:3 (Portrait Photo)": { width: 672, height: 1024 },
+        "3:2 (Photo)": { width: 1024, height: 672 },
+        "3:4 (Portrait Standard)": { width: 768, height: 1024 },
+        "4:3 (Standard)": { width: 1024, height: 768 },
+        "4:5 (Portrait)": { width: 832, height: 1024 },
+        "5:4 (Landscape)": { width: 1024, height: 832 },
+        "9:16 (Portrait Widescreen)": { width: 576, height: 1024 },
+        "16:9 (Widescreen)": { width: 1024, height: 576 },
+        "21:9 (Ultrawide)": { width: 1024, height: 448 },
+        "1.91:1 (Facebook/LinkedIn)": { width: 1024, height: 536 },
+      };
       const kimAspectRatio = kimAspectRatioOptions.includes(kim_aspect_ratio)
         ? kim_aspect_ratio
         : "1:1 (Square)";
+      const kimDims = kimDimensions[kimAspectRatio] ?? { width: 1024, height: 1024 };
+      // Hard guarantee of the workflow's divisible-by-8 constraint; idempotent
+      // for the 8-aligned table values above (e.g. 536 is 8- but not 32-aligned).
+      const kimWidth = Math.round(kimDims.width / 8) * 8;
+      const kimHeight = Math.round(kimDims.height / 8) * 8;
 
       console.log(
-        `[RHUB-Krea2Kim] Submitting aspect="${kimAspectRatio}" loraStrength=${kimLoraStrength}`,
+        `[RHUB-Krea2Kim] Submitting aspect="${kimAspectRatio}" ${kimWidth}x${kimHeight} loraStrength=${kimLoraStrength}`,
       );
       console.log(`[RHUB-Krea2Kim] Prompt (first 80): ${kimPrompt.substring(0, 80)}`);
 
@@ -730,16 +756,20 @@ RULES:
           {
             nodeId: "82",
             fieldName: "strength_model",
-            fieldValue: kimLoraStrength,
+            fieldValue: String(kimLoraStrength),
             description: "LoRA Strength",
           },
           {
-            nodeId: "49",
-            fieldName: "aspect_ratio",
-            fieldData:
-              '["COMBO", {"default": "1:1 (Square)", "options": ["1:1 (Square)", "2:3 (Portrait Photo)", "3:2 (Photo)", "3:4 (Portrait Standard)", "4:3 (Standard)", "9:16 (Portrait Widescreen)", "16:9 (Widescreen)", "21:9 (Ultrawide)"], "tooltip": "The aspect ratio for the output dimensions.", "multiselect": false}]',
-            fieldValue: kimAspectRatio,
-            description: "Aspect Ratio",
+            nodeId: "148",
+            fieldName: "value",
+            fieldValue: String(kimWidth),
+            description: "Width",
+          },
+          {
+            nodeId: "149",
+            fieldName: "value",
+            fieldValue: String(kimHeight),
+            description: "Height",
           },
         ],
         instanceType: "default",
