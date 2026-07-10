@@ -1,17 +1,18 @@
 # rhub — RunningHub Precision Control Center
 
-> **Advanced image and video generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation (FLUX.1-dev via RunningHub, Z-Image via RunPod Serverless, and FLUX.2-klein via RunPod Serverless), multi-LoRA additive blending, sequential batch queuing, selectable RunningHub image upscaling with LSB steganography support, image enhancement via fal.ai Phota and RunningHub workflows, video creation via fal.ai Seedance 2.0, and real-time polling.**
+> **Advanced image and video generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation across six backends (FLUX.1-dev, ZImage Upscale, FLUX.2-klein, and Krea2 Kim via RunningHub; Z-Image and FLUX.2-klein via RunPod Serverless), multi-LoRA additive blending, sequential batch queuing, selectable image upscaling via RunningHub or fal.ai Crystal Upscaler with LSB steganography support, image enhancement via fal.ai Phota and RunningHub workflows, video creation via fal.ai Seedance 2.0, and real-time polling.**
 
 **rhub** is a specialized SvelteKit-based dashboard that transforms simple subject descriptions into high-quality, LoRA-consistent imagery and video. It solves the "repetition problem" in AI generation by bridging expert prompt engineering (Gemini/Qwen) with multiple synthesis pipelines.
 
 ## Key Features
 
-- **Multi-Model Generation** — Switch between **FLUX.1-dev** (RunningHub), **Z-Image** (RunPod Serverless), and **FLUX.2-klein** (RunPod Serverless) from the Generate tab. The same AI prompt engineering pipeline feeds all three models.
+- **Multi-Model Generation** — Switch between six backends from the Generate tab: **FLUX.2-klein** and **Z-Image** (RunPod Serverless); **FLUX.1-dev**, **FLUX.2-klein (RH)**, **Krea2 Kim**, and **ZImage Upscale** (RunningHub). The same AI prompt engineering pipeline feeds every model.
 - **Multi-LoRA Blending** — Both **Z-Image** and **FLUX.2-klein** support a dynamic LoRA Stack. Load multiple adapters in parallel with per-LoRA strength control and additive blending. A curated preset dropdown is populated from a build-time config file — pick a style or enter any custom URL.
 - **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed prompts via a 2-step process: location selection + AI composition. Each model has a specialized Prompt Director tuned for its strengths.
 - **Z-Image Detail Pipeline** — Z-Image uses selectable spandrel-backed detail upscalers (`nomos_webphoto`, `nomos_webphoto_esrgan`, or `purephoto`) and defaults to an img2img hires-fix pass that upscales first, then lightly re-diffuses to clean super-resolution artifacts.
 - **FLUX.2-klein Support** — 9B-parameter undistilled flow-match transformer by Black Forest Labs, with quality presets, multi-LoRA support, optional detail refinement (2nd pass), and server-side upscaling.
-- **Image Upscaling** — Batch upscale images using selectable RunningHub workflows: the original 2K Upscale workflow or the RunningHub API Upscale app. Handles intermediary storage via S3 (e.g., Backblaze B2) with automatic presigned URL generation.
+- **RunningHub-Native Workflows** — Three additional generation paths submit directly to RunningHub app workflows rather than RunPod: **ZImage Upscale** (style presets + resolution presets, built-in 2x upscale/face detail), **FLUX.2-klein (RH)** (Standard or Upscale sub-workflow, requires a Character LoRA URL), and **Krea2 Kim** (fixed embedded LoRA, `K1mScum` trigger word auto-injected). Krea2 Kim and FLUX.2-klein (RH) return LSB-encoded images that are automatically decoded via the TT-Decoder pipeline.
+- **Image Upscaling** — Batch upscale images using a selectable engine: RunningHub **2K Upscale**, RunningHub **API Upscale**, or **fal.ai Crystal Upscaler** (`clarityai/crystal-upscaler`). RunningHub engines route through S3 (e.g., Backblaze B2) with automatic presigned URL generation; the fal.ai engine also uses the S3-hosted URL as input but returns its result synchronously (no polling).
 - **Image Enhancement** — Enhance images via the **Enhance** tab using **fal.ai Phota** or three RunningHub workflows (standard Enhance, Enhance+Detail, or HD Detailer). Accepts image file uploads or URLs. RunningHub uploads are temporarily hosted through S3 presigned URLs before workflow submission. Any generated image in the queue can be sent directly to Enhance.
 - **Video Creation** — Create videos via the **Create Video** tab using **fal.ai Seedance 2.0** (`bytedance/seedance-2.0/reference-to-video`). Supports up to 9 reference images, up to 3 reference videos, up to 3 reference audio files, 480p/720p/1080p resolution, duration, aspect ratio, audio generation, seed, and optional end-user ID. Inputs are validated locally against fal.ai's schema before submit to prevent avoidable 422 errors. FAL jobs are polled asynchronously and videos are saved to the output volume. Any generated image in the queue can be sent directly to the video tab as a reference image.
 - **LSB Steganography (TT-Decoder/Encoder)** — Built-in TypeScript support for both extracting hidden data from generated images and **embedding data into carrier images** for secure upscale processing.
@@ -63,6 +64,14 @@ The application runs as a single SvelteKit container. API routes handle server-s
 4. Job is submitted to the RunPod FLUX.2-klein Serverless endpoint (`/run`).
 5. The client polls `/api/zimage-check` until the job completes, then downloads the JPEG from the S3 presigned URL returned by RunPod.
 
+### Generation Flow — RunningHub-Native Workflows
+
+RunningHub also hosts three generation workflows that submit directly to their own RunningHub app rather than going through RunPod — each is polled via `/api/check` like FLUX.1-dev.
+
+1. **ZImage Upscale** (`rhub-zimage`, app `2027454454034862082`) — Sets width/height, a random seed, an optional LoRA URL, and one of 30 curated style presets (e.g. Phone Photo, Vintage Photo, Noir Photo, Drone Photo), then applies a built-in 2x upscale/face-detail pass.
+2. **FLUX.2-klein (RH)** (`rhub-klein`) — Requires a Character LoRA URL (submission is rejected without one). A **Workflow** toggle selects **Standard** (app `2036237857823662082`) or **Upscale** (app `2029780093899378690`); dimensions come from a 6-option aspect-ratio + orientation picker. Both variants return LSB-encoded images, so **Enable TT-Decoder** is forced on automatically.
+3. **Krea2 Kim** (`rhub-krea2-kim`, app `2073899469871075329`) — Uses a fixed, embedded LoRA (no LoRA URL field); only its strength is adjustable. The trigger word `K1mScum` is auto-injected into the prompt if missing. Width/height are derived from an 11-option aspect-ratio dropdown. Output is LSB-encoded, so **Enable TT-Decoder** is forced on automatically.
+
 ### Enhance Flow
 
 1. User opens the **Enhance** tab and selects an engine: **fal.ai Phota**, **RunningHub Enhance**, **RunningHub Enhance+Detail**, or **RunningHub HD Detailer**.
@@ -83,14 +92,13 @@ The application runs as a single SvelteKit container. API routes handle server-s
 
 ### Upscale Flow
 
-1. User uploads images via the **Upscale** tab.
+1. User uploads images via the **Upscale** tab and selects an **Upscale Engine**.
 2. Background processor picks the next upscale task:
-   - If **TT-Decoder** toggle is ON: The image is encoded into a new carrier PNG using **TT-Encoder**.
-   - The image (original or encoded) is uploaded to S3 storage.
-   - A temporary presigned URL is generated and sent to the selected RunningHub upscale workflow:
+   - If the engine is **FAL — Crystal Upscaler**: the TT-Decoder step is skipped (not applicable to the fal.ai path). The image is uploaded to S3 for a public URL, then submitted synchronously to `fal.run/clarityai/crystal-upscaler`; the result is downloaded and saved directly — no polling.
+   - Otherwise (RunningHub engines): if **TT-Decoder** toggle is ON, the image is encoded into a new carrier PNG using **TT-Encoder**. The image (original or encoded) is uploaded to S3 storage, and a temporary presigned URL is sent to the selected RunningHub upscale workflow:
      - **RunningHub — 2K Upscale** uses the existing 2K workflow, switching to the TT carrier workflow when TT-Decoder is enabled.
      - **RunningHub — API Upscale** submits to RunningHub app `2053348161841836033` with node `125`.
-3. The client polls status and downloads the upscaled result.
+3. For RunningHub engines, the client polls `/api/check` and downloads the upscaled result. The fal.ai engine returns the saved filename immediately.
 
 ## Quick Start
 
@@ -98,10 +106,10 @@ The application runs as a single SvelteKit container. API routes handle server-s
 
 - [Docker](https://docs.docker.com/get-docker/) & Docker Compose
 - A [Google Gemini API key](https://aistudio.google.com/apikey) or a [RunPod API key](https://www.runpod.io/)
-- A [RunningHub API key](https://www.runninghub.ai/) (required for FLUX.1-dev, Upscaling, and RunningHub Enhance)
+- A [RunningHub API key](https://www.runninghub.ai/) (required for FLUX.1-dev, ZImage Upscale, FLUX.2-klein (RH), Krea2 Kim, RunningHub Upscaling, and RunningHub Enhance)
 - A [RunPod API key](https://www.runpod.io/) (required for Z-Image, FLUX.2-klein, and Qwen prompt provider)
-- A [fal.ai API key](https://fal.ai/) (required for Enhance via Phota and Create Video)
-- **S3-compatible Storage** (Required for Upscaling and RunningHub Enhance file uploads) — e.g., [Backblaze B2](https://www.backblaze.com/cloud-storage).
+- A [fal.ai API key](https://fal.ai/) (required for Enhance via Phota, Create Video, and the Crystal Upscaler upscale engine)
+- **S3-compatible Storage** (Required for Upscaling — both RunningHub engines and fal.ai Crystal Upscaler — and RunningHub Enhance file uploads) — e.g., [Backblaze B2](https://www.backblaze.com/cloud-storage).
 
 ### Run with Docker (Recommended)
 
@@ -131,17 +139,17 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 | Variable                     | Required                                        | Description                                                         |
 | ---------------------------- | ----------------------------------------------- | ------------------------------------------------------------------- |
-| `RUNNINGHUB_API_KEY`         | For FLUX.1-dev, Upscaling & RunningHub Enhance  | RunningHub API key                                                  |
+| `RUNNINGHUB_API_KEY`         | For RunningHub generation, Upscaling & Enhance  | RunningHub API key                                                  |
 | `GEMINI_API_KEY`             | For Gemini prompt provider                      | Google Gemini API key                                               |
 | `RUNPOD_API_KEY`             | For Z-Image, FLUX.2-klein & Qwen provider       | RunPod API key                                                      |
-| `FAL_KEY`                    | For Enhance (Phota) & Create Video              | fal.ai API key                                                      |
+| `FAL_KEY`                    | For Enhance (Phota), Create Video & Crystal Upscaler | fal.ai API key                                                 |
 | `RUNPOD_ZIMAGE_ENDPOINT`     | For Z-Image                                     | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
 | `RUNPOD_FLUX_KLEIN_ENDPOINT` | For FLUX.2-klein                                | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
-| `S3_ENDPOINT`                | For Upscaling & RunningHub Enhance uploads      | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
-| `S3_BUCKET`                  | For Upscaling & RunningHub Enhance uploads      | Name of the bucket for intermediary image storage                   |
-| `S3_ACCESS_KEY_ID`           | For Upscaling & RunningHub Enhance uploads      | S3 access key ID                                                    |
-| `S3_SECRET_ACCESS_KEY`       | For Upscaling & RunningHub Enhance uploads      | S3 secret access key                                                |
-| `S3_REGION`                  | For Upscaling & RunningHub Enhance uploads      | S3 region (default: `us-east-1`)                                    |
+| `S3_ENDPOINT`                | For Upscaling (RunningHub & fal.ai) & RunningHub Enhance uploads | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
+| `S3_BUCKET`                  | For Upscaling (RunningHub & fal.ai) & RunningHub Enhance uploads | Name of the bucket for intermediary image storage                   |
+| `S3_ACCESS_KEY_ID`           | For Upscaling (RunningHub & fal.ai) & RunningHub Enhance uploads | S3 access key ID                                                    |
+| `S3_SECRET_ACCESS_KEY`       | For Upscaling (RunningHub & fal.ai) & RunningHub Enhance uploads | S3 secret access key                                                |
+| `S3_REGION`                  | For Upscaling (RunningHub & fal.ai) & RunningHub Enhance uploads | S3 region (default: `us-east-1`)                                    |
 | `BODY_SIZE_LIMIT`            | Always                                          | Maximum upload size in bytes (e.g., `52428800` for 50MB)            |
 | `SITE_PASSWORD`              | Always                                          | Password required to access the web UI                              |
 | `COOKIE_SECRET`              | Always                                          | Secret used to sign the session cookie — generate with `openssl rand -hex 32` |
@@ -150,13 +158,13 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 | Setting                | Description                                                                                                  |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| **Generation Model**   | Choose **FLUX.1-dev** (RunningHub), **Z-Image** (RunPod Serverless), or **FLUX.2-klein** (RunPod Serverless) |
+| **Generation Model**   | Choose from RunPod Serverless (**FLUX.2-klein**, **Z-Image**) or RunningHub (**FLUX.1-dev**, **FLUX.2-klein (RH)**, **Krea2 Kim**, **ZImage Upscale**) |
 | **AI Prompt Provider** | Choose between Google Gemini or RunPod (Qwen 30B) for prompt engineering                                     |
 | **RunningHub API Key** | Overrides `RUNNINGHUB_API_KEY` env var for this session                                                      |
 | **Gemini API Key**     | Overrides `GEMINI_API_KEY` env var for this session                                                          |
 | **RunPod API Key**     | Overrides `RUNPOD_API_KEY` env var for this session                                                          |
 | **fal.ai API Key**     | Overrides `FAL_KEY` env var for this session (used by Enhance and Create Video)                              |
-| **Upscale Engine**     | Choose **RunningHub — 2K Upscale** or **RunningHub — API Upscale** for tasks added from the Upscale tab       |
+| **Upscale Engine**     | Choose **RunningHub — 2K Upscale**, **RunningHub — API Upscale**, or **FAL — Crystal Upscaler** for tasks added from the Upscale tab |
 | **Enable TT-Decoder**  | Toggle LSB steganography decoding/encoding for supported RunningHub generation and upscale workflows          |
 
 ### Generation Parameters
@@ -210,6 +218,36 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | ↳ Upscale Factor           | `2.0`                 | Scale multiplier (0.25–4×).                                                                                                                                                                                                                                       |
 | ↳ Upscale Blend            | `0.35`                | Blending factor between original and upscaled features.                                                                                                                                                                                                           |
 
+#### RunningHub ZImage Upscale
+
+| Parameter    | Default                        | Description                                                                                             |
+| ------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Image Style  | `None`                          | 30 curated style presets (Phone Photo, Vintage Photo, Noir Photo, Drone Photo, Synthwave Photo, etc.).    |
+| Resolution   | Instagram Portrait (816×1024)   | Grouped presets (Social Media, Print) or manual width/height, sent before the workflow's built-in 2x upscale/face-detail pass. |
+| LoRA URL     | blank                           | Optional single LoRA applied during generation.                                                           |
+| Seed         | random                          | Generated server-side per request.                                                                        |
+
+#### RunningHub FLUX.2-klein (RH)
+
+| Parameter          | Default    | Description                                                                          |
+| ------------------- | ---------- | --------------------------------------------------------------------------------------- |
+| Workflow            | `Standard` | `Standard` (app `2036237857823662082`) or `Upscale` (app `2029780093899378690`).       |
+| Character LoRA URL  | —          | Required — submission is rejected without it.                                          |
+| Aspect Ratio        | `1:1`      | 6 presets (`1:1`, `2:3`, `3:4`, `4:5`, `9:16`, `21:9`), long side ~1024, 32-aligned.    |
+| Orientation         | `Portrait` | `Portrait` or `Landscape` — swaps width/height for the selected aspect ratio.          |
+
+Output is LSB-encoded; **Enable TT-Decoder** is forced on automatically for this model.
+
+#### RunningHub Krea2 Kim
+
+| Parameter      | Default         | Description                                                                                    |
+| --------------- | ---------------- | -------------------------------------------------------------------------------------------------- |
+| LoRA Strength   | `1`              | Strength of the workflow's fixed, embedded LoRA (no URL field — the LoRA itself can't be changed). |
+| Aspect Ratio    | `1:1 (Square)`   | 11 presets; width/height derived from the option string, 8-aligned.                                |
+| Trigger Word    | `K1mScum` (auto) | Automatically injected into the prompt if the user's prompt doesn't already contain it.            |
+
+Output is LSB-encoded; **Enable TT-Decoder** is forced on automatically for this model.
+
 #### Create Video (fal.ai Seedance 2.0)
 
 | Parameter           | Default       | Description                                                                          |
@@ -238,6 +276,9 @@ Submits an image generation job. Handles AI prompt engineering via Gemini or Run
 - **FLUX.1-dev**: Submits to RunningHub workflow. Returns `{ taskId, model: 'flux-dev', prompt }`.
 - **Z-Image**: Submits to RunPod Z-Image Serverless endpoint with multi-LoRA `loras` array, Base-model defaults (`steps=50`, `cfg_normalization=true`), `shift` left unset so the backend checkpoint default applies (6.0 base / 3.0 turbo), selectable `upscale_model`, default img2img hires-fix controls, and fallback single-pass detail upscale controls. Returns `{ jobId, model: 'z-image', prompt }`.
 - **FLUX.2-klein**: Submits to RunPod FLUX.2-klein Serverless endpoint with preset, explicit `width`/`height` from the selected aspect ratio, multi-LoRA `loras`, `lora_scale_mode`, `max_sequence_length`, optional 2nd pass options, and optional upscale options. Returns `{ jobId, model: 'flux-klein', prompt }`.
+- **ZImage Upscale (RunningHub)**: Submits to RunningHub app `2027454454034862082` with width/height/seed/LoRA/style nodes. Returns `{ taskId, model: 'rhub-zimage', prompt }`.
+- **FLUX.2-klein (RH)**: Requires a Character LoRA URL. Submits to RunningHub app `2036237857823662082` (Standard) or `2029780093899378690` (Upscale) depending on the selected Workflow. Returns `{ taskId, model: 'rhub-klein', prompt }`.
+- **Krea2 Kim**: Fixed-LoRA RunningHub workflow; auto-injects the `K1mScum` trigger word. Submits to RunningHub app `2073899469871075329` with prompt/LoRA-strength/width/height nodes. Returns `{ taskId, model: 'rhub-krea2-kim', prompt }`.
 
 ### `POST /api/zimage-check`
 
@@ -245,10 +286,11 @@ Polls a RunPod job (Z-Image or FLUX.2-klein) for completion. When the job comple
 
 ### `POST /api/upscale`
 
-Handles multipart form uploads. Encodes images if requested, uploads to S3, and submits to the selected RunningHub upscaling workflow. `upscaleEngine` may be `runninghub-2k` or `runninghub-api`.
+Handles multipart form uploads. Uploads the image to S3 for a public URL, then routes by `upscaleEngine`: `runninghub-2k`, `runninghub-api`, or `fal-crystal`.
 
-- `runninghub-2k` submits to the existing 2K workflow (`2022348592370950145`) or the TT carrier workflow (`2022423075609907202`) when `useTtDecoder=true`.
-- `runninghub-api` submits to app `2053348161841836033` with `nodeInfoList[0].nodeId = "125"` and the uploaded image presigned URL as `fieldValue`.
+- `runninghub-2k` encodes the image via TT-Encoder first when `useTtDecoder=true`, then submits to the existing 2K workflow (`2022348592370950145`) or the TT carrier workflow (`2022423075609907202`).
+- `runninghub-api` submits to app `2053348161841836033` with `nodeInfoList[0].nodeId = "125"` and the uploaded image presigned URL as `fieldValue`. Both RunningHub engines return `{ taskId, imageUrl }` for polling via `/api/check`.
+- `fal-crystal` calls `POST https://fal.run/clarityai/crystal-upscaler` synchronously with `{ image_url, output_format: "png" }`, downloads the result, saves it to the output directory, and returns `{ filename }` directly — no polling. TT-Decoder is not applicable to this engine.
 
 ### `POST /api/check`
 
@@ -322,7 +364,8 @@ The script scans:
 - **Frontend**: Svelte 5 (Runes), TypeScript, SvelteKit
 - **Backend**: Node.js, AWS SDK (S3), pngjs
 - **AI**: Gemini 3 Flash / RunPod Qwen 30B
-- **Image Generation**: FLUX.1-dev (RunningHub) / Z-Image (RunPod Serverless) / FLUX.2-klein (RunPod Serverless)
+- **Image Generation**: FLUX.1-dev / ZImage Upscale / FLUX.2-klein (RH) / Krea2 Kim (RunningHub) / Z-Image / FLUX.2-klein (RunPod Serverless)
+- **Image Upscaling**: RunningHub (2K Upscale / API Upscale) / fal.ai Crystal Upscaler
 - **Image Enhancement**: fal.ai Phota / RunningHub Enhance workflows
 - **Video Generation**: fal.ai Seedance 2.0 (`bytedance/seedance-2.0/reference-to-video`)
 - **Infrastructure**: Docker, Docker Compose
