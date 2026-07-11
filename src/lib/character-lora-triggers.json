@@ -1,0 +1,25 @@
+{
+  "_comment": "Maps Character LoRA filenames (no extension) to their known trigger words. Only LoRAs listed here get a trigger word; all others are treated as unknown (empty). Add entries as trigger words are confirmed.",
+  "flux.2-klein-9b": {
+    "K1mScum-flux.2-klein-OneTrainer": ["K1mScum"],
+    "K1mScum-flux.2-klein-OneTrainer2": ["K1mScum"],
+    "K1mScum-flux.2-klein_000002750": ["K1mScum"],
+    "K1mScum-flux.2-klein_000003000": ["K1mScum"]
+  },
+  "zImage": {
+    "K1mScum-000086-Z-Image-Base": ["K1mScum"],
+    "K1mScum_000005500": ["K1mScum"]
+  },
+  "Krea2": {
+    "K1mScum-Krea2_000002500": ["K1mScum"],
+    "K1mScum-Krea2_000005250": ["K1mScum"]
+  },
+  "IdeoGram4": {
+    "K1mScum": ["K1mScum"],
+    "K1mScum_000001500": ["K1mScum"],
+    "K1mScum_000001750": ["K1mScum"],
+    "K1mScum_000002000": ["K1mScum"],
+    "K1mScum_000002250": ["K1mScum"],
+    "K1mScum_000002750": ["K1mScum"]
+  }
+}

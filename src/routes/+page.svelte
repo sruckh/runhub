@@ -9,6 +9,44 @@
     const lorasKlein: { name: string; url: string; triggerWords?: string[] }[] = untrack(() => data.lorasKlein ?? []);
     const lorasZimage: { name: string; url: string; triggerWords?: string[] }[] = untrack(() => data.lorasZimage ?? []);
 
+    // Character LoRAs (fetched dynamically from filesystem).
+    // Kept fully independent from the Style LoRA stack (kleinLoras) and the
+    // legacy single-LoRA fields (loraUrl/loraKeyword). Merged into the submit
+    // payload in addToQueue() — never written back into kleinLoras/loraUrl.
+    let characterLoras: { name: string; url: string; triggerWords: string[] }[] = $state([]);
+    let selectedCharacterLora = $state('__custom__');
+    let characterLoraUrl = $state('');
+    let characterLoraKeyword = $state('');
+    let characterLoraScale = $state(0.85);
+
+    async function fetchCharacterLoras(modelId: string) {
+        try {
+            const res = await fetch(`/api/lora-character?model=${modelId}`);
+            if (res.ok) {
+                const data = await res.json();
+                characterLoras = data.loras ?? [];
+            } else {
+                characterLoras = [];
+            }
+        } catch {
+            characterLoras = [];
+        }
+        selectedCharacterLora = '__custom__';
+        characterLoraUrl = '';
+        characterLoraKeyword = '';
+    }
+
+    const CHARACTER_LORA_MODELS = new Set(['flux-klein', 'z-image', 'rhub-klein', 'rhub-zimage']);
+
+    // Selecting a curated Character LoRA only fills the Character LoRA fields.
+    // It does NOT touch the Style LoRA stack or legacy single-LoRA fields.
+    function applyCharacterLora(loraName: string) {
+        const lora = characterLoras.find(l => l.name === loraName);
+        if (!lora) return; // "__custom__" — leave fields as-is for manual entry
+        characterLoraUrl = lora.url;
+        characterLoraKeyword = lora.triggerWords[0] || '';
+    }
+
     let loraUrl = $state('');
     let loraKeyword = $state('');
     let subject = $state('');
@@ -97,6 +135,17 @@
             kleinLoras = [{ url: '', keyword: '', scale: 0.85, preset: '' }];
         }
         _prevLoraModel = m;
+    });
+
+    // Fetch Character LoRAs when model changes
+    $effect(() => {
+        const m = model;
+        if (CHARACTER_LORA_MODELS.has(m)) {
+            fetchCharacterLoras(m);
+        } else {
+            characterLoras = [];
+            selectedCharacterLora = '';
+        }
     });
 
     // Sync kleinShift with preset default when preset changes
@@ -371,7 +420,28 @@
     }
 
     async function addToQueue() {
-        if (model === 'rhub-klein' && !loraUrl.trim()) {
+        // Character LoRA is independent state; merge it into the LoRA payload here.
+        const hasCharLora = characterLoraUrl.trim().length > 0;
+        const charUrl = characterLoraUrl.trim();
+        const charKeyword = characterLoraKeyword.trim();
+        const charScale = characterLoraScale;
+
+        // For single-LoRA models, the Character LoRA URL fills the single slot
+        // (falling back to the legacy loraUrl field if no Character LoRA is set).
+        const effectiveLoraUrl = hasCharLora ? charUrl : loraUrl;
+        const effectiveLoraKeyword = hasCharLora ? charKeyword : loraKeyword;
+
+        // For multi-LoRA models, prepend the Character LoRA as its own stack entry,
+        // leaving the Style LoRA stack (kleinLoras) untouched.
+        const isMultiLora = model === 'flux-klein' || model === 'z-image';
+        const charEntry = hasCharLora
+            ? { url: charUrl, keyword: charKeyword, scale: charScale, preset: '' }
+            : null;
+        const mergedKleinLoras = isMultiLora
+            ? [...(charEntry ? [charEntry] : []), ...kleinLoras.map(l => ({ ...l }))].filter(l => l.url.trim())
+            : [];
+
+        if (model === 'rhub-klein' && !effectiveLoraUrl.trim()) {
             error = 'Character LoRA URL is required for FLUX.2-klein (RH)';
             return;
         }
@@ -379,11 +449,11 @@
         const baseTask = {
             type: 'generate',
             model,
-            loraUrl,
-            loraKeyword: (model === 'flux-klein' || model === 'z-image')
-                ? kleinLoras.map(l => l.keyword).map(k => k.trim()).filter(Boolean).join(', ')
-                : loraKeyword,
-            kleinLoras: (model === 'flux-klein' || model === 'z-image') ? kleinLoras.map(l => ({ ...l })) : undefined,
+            loraUrl: isMultiLora ? loraUrl : effectiveLoraUrl,
+            loraKeyword: isMultiLora
+                ? mergedKleinLoras.map(l => l.keyword).map(k => k.trim()).filter(Boolean).join(', ')
+                : effectiveLoraKeyword,
+            kleinLoras: isMultiLora ? mergedKleinLoras : undefined,
             subject,
             customPrompt,
             useCustomPrompt,
@@ -439,7 +509,7 @@
             rhub_zimage_width: rhubZimageWidth,
             rhub_zimage_height: rhubZimageHeight,
             rhub_klein_workflow: rhubKleinWorkflow,
-            rhub_klein_lora1_url: loraUrl.trim(),
+            rhub_klein_lora1_url: effectiveLoraUrl.trim(),
             rhub_klein_aspect_ratio: rhubKleinAspectRatio,
             rhub_klein_orientation: rhubKleinOrientation,
             kim_lora_strength: kimLoraStrength,
@@ -1416,6 +1486,39 @@
                         </optgroup>
                     </select>
                 </div>
+
+                {#if characterLoras.length > 0}
+                    <div class="multi-lora-section">
+                        <div class="multi-lora-header">
+                            <span class="multi-lora-label">Character LoRA</span>
+                        </div>
+                        <div class="lora-entry">
+                            <div class="lora-entry-fields">
+                                <div class="field">
+                                    <label for="characterLora">Character LoRA</label>
+                                    <select id="characterLora" bind:value={selectedCharacterLora} onchange={() => applyCharacterLora(selectedCharacterLora)}>
+                                        <option value="__custom__">Use Custom LoRA</option>
+                                        {#each characterLoras as lora}
+                                            <option value={lora.name}>{lora.name}</option>
+                                        {/each}
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="characterLoraUrl">Character LoRA URL</label>
+                                    <input type="url" id="characterLoraUrl" bind:value={characterLoraUrl} placeholder="https://example.com/lora.safetensors" />
+                                </div>
+                                <div class="field">
+                                    <label for="characterLoraKeyword">Character LoRA Trigger Word</label>
+                                    <input type="text" id="characterLoraKeyword" bind:value={characterLoraKeyword} placeholder="e.g. K1mScum" />
+                                </div>
+                                <div class="field">
+                                    <label for="characterLoraScale">Character LoRA Strength</label>
+                                    <input type="number" id="characterLoraScale" bind:value={characterLoraScale} min="0" max="2" step="0.05" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
 
                 {#if model === 'flux-klein' || model === 'z-image'}
                     <div class="multi-lora-section">

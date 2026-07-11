@@ -10,7 +10,7 @@ export function authToken(): string {
   return createHmac('sha256', secret).update('rhub-authenticated').digest('hex');
 }
 
-const PUBLIC_PATHS = ['/login', '/logout', '/favicon.ico', '/robots.txt'];
+const PUBLIC_PATHS = ['/login', '/logout', '/favicon.ico', '/robots.txt', '/api/lora-character'];
 
 export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url;
