@@ -14,6 +14,8 @@ const MODEL_TO_SUBDIR: Record<string, string> = {
   "z-image": "zImage",
   "rhub-zimage": "zImage",
   "rhub-krea2-kim": "Krea2",
+  "fal-ideogram4": "IdeoGram4",
+  "rhub-ideogram4": "IdeoGram4",
 };
 
 // Config is keyed by subdir -> LoRA name -> trigger words.

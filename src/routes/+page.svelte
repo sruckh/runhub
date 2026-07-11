@@ -36,7 +36,7 @@
         characterLoraKeyword = '';
     }
 
-    const CHARACTER_LORA_MODELS = new Set(['flux-klein', 'z-image', 'rhub-klein', 'rhub-zimage']);
+    const CHARACTER_LORA_MODELS = new Set(['flux-klein', 'z-image', 'rhub-klein', 'rhub-zimage', 'fal-ideogram4', 'rhub-ideogram4']);
 
     // Selecting a curated Character LoRA only fills the Character LoRA fields.
     // It does NOT touch the Style LoRA stack or legacy single-LoRA fields.
@@ -461,6 +461,7 @@
             geminiKey,
             rhubKey,
             runpodKey,
+            falKey,
             promptProvider,
             useTtDecoder: model === 'rhub-krea2-kim' ? true : useTtDecoder,
             outputDir,
@@ -713,6 +714,12 @@
             
             const data = await response.json();
             if (data.error) throw new Error(data.error);
+
+            // fal-ideogram4 is synchronous: the image is already saved server-side.
+            if (data.model === 'fal-ideogram4') {
+                updateResult(resultId, { status: 'SUCCESS', filename: data.filename, prompt: data.prompt, ts: Date.now() });
+                return;
+            }
 
             updateResult(resultId, { status: 'PROCESSING', prompt: data.prompt });
 
@@ -1483,6 +1490,10 @@
                             <option value="flux-dev">FLUX.1-dev</option>
                             <option value="rhub-krea2-kim">Krea2 Kim</option>
                             <option value="rhub-zimage">ZImage Upscale</option>
+                            <option value="rhub-ideogram4">Ideogram4</option>
+                        </optgroup>
+                        <optgroup label="FAL">
+                            <option value="fal-ideogram4">Ideogram4</option>
                         </optgroup>
                     </select>
                 </div>

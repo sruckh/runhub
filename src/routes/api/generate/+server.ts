@@ -3,9 +3,14 @@ import type { RequestHandler } from "./$types";
 import { env } from "$env/dynamic/private";
 import { GoogleGenAI } from "@google/genai";
 import { getNextLocation } from "$lib/locations";
+import fs from "fs/promises";
+import path from "path";
 
 const RUNPOD_ZIMAGE_ENDPOINT_DEFAULT = "https://api.runpod.ai/v2/j7rrb3raom3lzh";
 const RUNPOD_FLUX_KLEIN_ENDPOINT_DEFAULT = "https://api.runpod.ai/v2/639jlguymlblim";
+
+// Where generated images are persisted (shared with /api/enhance and /api/upscale).
+const MOUNT_PATH = "/mount";
 
 export const POST: RequestHandler = async ({ request }) => {
   const {
@@ -13,9 +18,12 @@ export const POST: RequestHandler = async ({ request }) => {
     loraUrl,
     subject,
     aspectRatio,
+    outputDir = "generations",
+    prefix = "image",
     geminiKey: userGeminiKey,
     rhubKey: userRhubKey,
     runpodKey: userRunpodKey,
+    falKey: userFalKey,
     promptProvider = "gemini",
     useTtDecoder = false,
     customPrompt = "",
@@ -85,6 +93,7 @@ export const POST: RequestHandler = async ({ request }) => {
   const geminiKey = userGeminiKey || env.GEMINI_API_KEY || "";
   const rhubKey = userRhubKey || env.RUNNINGHUB_API_KEY || "";
   const runpodKey = userRunpodKey || env.RUNPOD_API_KEY || "";
+  const falKey = userFalKey || env.FAL_KEY || "";
 
   if (!useCustomPrompt) {
     if (promptProvider === "gemini" && !geminiKey) {
@@ -100,6 +109,14 @@ export const POST: RequestHandler = async ({ request }) => {
   }
   if ((model === "z-image" || model === "flux-klein") && !runpodKey) {
     return json({ error: `RunPod API Key is required for ${model}` }, { status: 400 });
+  }
+  if (model === "fal-ideogram4" && !falKey) {
+    return json({ error: "fal.ai API Key is required for Ideogram4" }, { status: 400 });
+  }
+  // RunningHost Ideogram4 workflow is not wired up yet — fail fast with a clear
+  // message and make NO upstream API call.
+  if (model === "rhub-ideogram4") {
+    return json({ error: "Ideogram4 on RunningHub is not available yet" }, { status: 400 });
   }
 
   try {
@@ -692,6 +709,69 @@ RULES:
       return json({ taskId: kleinSubmitData.taskId, model: "rhub-klein", prompt: finalPrompt });
     }
 
+    // ── Ideogram4 via fal.ai (synchronous fal.run call) ────────────────────
+    if (model === "fal-ideogram4") {
+      // fal's LoRAInput uses `path` (the weights URL) + `scale`. Only send a
+      // loras entry when a Character LoRA URL is present.
+      const ideogramLoraUrl = typeof loraUrl === "string" ? loraUrl.trim() : "";
+      const ideogramLoraScale =
+        typeof loraScale === "number" && Number.isFinite(loraScale) ? loraScale : 0.85;
+      const ideogramLoras = ideogramLoraUrl
+        ? [{ path: ideogramLoraUrl, scale: ideogramLoraScale }]
+        : [];
+
+      console.log(
+        `[FAL-Ideogram4] Submitting loras=${ideogramLoras.length} scale=${ideogramLoraScale}`,
+      );
+      console.log(`[FAL-Ideogram4] Prompt (first 80): ${finalPrompt.substring(0, 80)}`);
+
+      const ideogramResponse = await fetch("https://fal.run/ideogram/v4/lora", {
+        method: "POST",
+        headers: {
+          Authorization: `Key ${falKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: finalPrompt,
+          loras: ideogramLoras,
+          expansion_model: "None",
+          rendering_speed: "QUALITY",
+          acceleration: "none",
+          enable_safety_checker: false,
+          output_format: "png",
+          num_images: 1,
+        }),
+      });
+
+      if (!ideogramResponse.ok) {
+        const errorText = await ideogramResponse.text();
+        console.error(
+          `[FAL-Ideogram4] fal.ai error: ${ideogramResponse.status} ${errorText}`,
+        );
+        throw new Error(`fal.ai API error: ${ideogramResponse.status}`);
+      }
+
+      const ideogramData = await ideogramResponse.json();
+      const resultImageUrl = ideogramData?.images?.[0]?.url;
+      if (!resultImageUrl) throw new Error("No image URL in fal.ai response");
+
+      // Sync path: download + persist now, mirroring /api/enhance and /api/upscale.
+      const fullOutputDir = path.join(MOUNT_PATH, outputDir);
+      await fs.mkdir(fullOutputDir, { recursive: true });
+
+      const imageRes = await fetch(resultImageUrl);
+      if (!imageRes.ok)
+        throw new Error(`Failed to download Ideogram4 image: ${imageRes.status}`);
+      const arrayBuffer = await imageRes.arrayBuffer();
+      const imageBuffer = Buffer.from(arrayBuffer);
+
+      const filename = await getNextFilename(fullOutputDir, prefix, "png");
+      await fs.writeFile(path.join(fullOutputDir, filename), imageBuffer);
+      console.log(`[FAL-Ideogram4] Saved: ${filename}`);
+
+      return json({ model: "fal-ideogram4", filename, prompt: finalPrompt });
+    }
+
     // ── Krea2 Kim via RunningHub ───────────────────────────────────────────
     if (model === "rhub-krea2-kim") {
       // The workflow's LoRA is fixed; its trigger word (K1mScum) MUST be present
@@ -860,4 +940,25 @@ function calculateRunningHubDimensions(ar: string) {
   let h = Math.sqrt(targetArea / ratio);
   let w = h * ratio;
   return { width: Math.ceil(w / 32) * 32, height: Math.ceil(h / 32) * 32 };
+}
+
+// Shared with /api/enhance and /api/upscale — sequential <prefix>_NNN.<ext>.
+async function getNextFilename(
+  dir: string,
+  prefix: string,
+  extension: string,
+): Promise<string> {
+  const files = await fs.readdir(dir);
+  const regex = new RegExp(
+    `^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}_(\\d{3})\\.${extension}$`,
+  );
+  let maxNum = 0;
+  for (const file of files) {
+    const match = file.match(regex);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  return `${prefix}_${String(maxNum + 1).padStart(3, "0")}.${extension}`;
 }
