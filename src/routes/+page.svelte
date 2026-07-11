@@ -1461,8 +1461,8 @@
             </div>
         </div>
 
-        <section class="lora-settings">
-            {#if activeTab === 'generate'}
+        {#if activeTab === 'generate'}
+            <section class="lora-settings">
                 <div class="settings-header">
                     <h2>Generation Settings</h2>
                     <span class="settings-badge">
@@ -1565,6 +1565,16 @@
                                 {/if}
                             </div>
                         {/each}
+                    </div>
+                {:else if model === 'rhub-klein' && characterLoras.length === 0}
+                    <div class="field">
+                        <label for="rhubKleinLoraUrl">LoRA URL</label>
+                        <input
+                            type="url"
+                            id="rhubKleinLoraUrl"
+                            bind:value={loraUrl}
+                            placeholder="https://huggingface.co/.../model.safetensors"
+                        />
                     </div>
                 {:else if model !== 'rhub-klein' && model !== 'rhub-krea2-kim'}
                     <div class="grid">
@@ -1701,8 +1711,8 @@
                 {/if}
 
                 {#if model === 'rhub-klein'}
-                    <div class="lora-section">
-                        <h4>Character LoRA</h4>
+                    <div class="workflow-options">
+                        <h4>Workflow Options</h4>
                         <div class="field">
                             <label for="rhubKleinWorkflow">Workflow</label>
                             <select id="rhubKleinWorkflow" bind:value={rhubKleinWorkflow}>
@@ -1710,15 +1720,6 @@
                                     <option value={workflow.id}>{workflow.label}</option>
                                 {/each}
                             </select>
-                        </div>
-                        <div class="field">
-                            <label for="rhubKleinLoraUrl">LoRA URL</label>
-                            <input
-                                type="url"
-                                id="rhubKleinLoraUrl"
-                                bind:value={loraUrl}
-                                placeholder="https://huggingface.co/.../model.safetensors"
-                            />
                         </div>
                     </div>
                     <div class="grid">
@@ -2047,10 +2048,16 @@
                         {/if}
                     {/if}
                 {/if}
+            </section>
             {:else if activeTab === 'upscale'}
+                <section class="upscale-settings">
                 <div class="settings-header">
                     <h2>Upscale Settings</h2>
                     <span class="settings-badge">{upscaleEngine === 'runninghub-api' ? 'RunningHub API' : upscaleEngine === 'fal-crystal' ? 'FAL Crystal' : '2K Resolution'}</span>
+                </div>
+                <div class="field">
+                    <label for="upscaleFalKey">fal.ai API Key</label>
+                    <input type="password" id="upscaleFalKey" bind:value={falKey} placeholder="Enter fal.ai Key" />
                 </div>
                 <div class="field">
                     <label for="upscaleEngine">Upscale Engine</label>
@@ -2060,12 +2067,7 @@
                         <option value="fal-crystal">FAL — Crystal Upscaler</option>
                     </select>
                 </div>
-                {#if upscaleEngine === 'fal-crystal'}
-                <div class="field">
-                    <label for="upscaleFalKey">fal.ai API Key</label>
-                    <input type="password" id="upscaleFalKey" bind:value={falKey} placeholder="Enter fal.ai Key" />
-                </div>
-                {:else}
+                {#if upscaleEngine !== 'fal-crystal'}
                 <div class="field toggle-field">
                     <label for="useTtDecoderUpscale" class="toggle-label">
                         <span class="toggle-text">Enable TT-Decoder</span>
@@ -2104,10 +2106,17 @@
                         </div>
                     {/if}
                 </div>
+            </section>
             {:else if activeTab === 'enhance'}
+                <section class="enhance-settings">
                 <div class="settings-header">
                     <h2>Enhance Settings</h2>
                     <span class="settings-badge">{enhanceEngine === 'fal' ? 'fal.ai Phota' : enhanceEngine === 'runninghub' ? 'RunningHub Enhance' : enhanceEngine === 'runninghub-detail' ? 'RunningHub Enhance+Detail' : 'RunningHub HD Detailer'}</span>
+                </div>
+
+                <div class="field">
+                    <label for="falKey">fal.ai API Key</label>
+                    <input type="password" id="falKey" bind:value={falKey} placeholder="Enter fal.ai Key" />
                 </div>
 
                 <div class="field">
@@ -2121,11 +2130,6 @@
                 </div>
 
                 {#if enhanceEngine === 'fal'}
-                <div class="field">
-                    <label for="falKey">fal.ai API Key</label>
-                    <input type="password" id="falKey" bind:value={falKey} placeholder="Enter fal.ai Key" />
-                </div>
-
                 <div class="field">
                     <label for="enhanceOutputFormat">Output Format</label>
                     <select id="enhanceOutputFormat" bind:value={enhanceOutputFormat}>
@@ -2173,7 +2177,9 @@
                         </div>
                     {/if}
                 </div>
+            </section>
             {:else if activeTab === 'video'}
+                <section class="video-settings">
                 <div class="settings-header">
                     <h2>Create Video</h2>
                     <span class="settings-badge">Seedance 2.0 — fal.ai</span>
@@ -2370,6 +2376,7 @@
                     {/each}
                 </div>
                 {/if}
+            </section>
             {/if}
 
             <div class="grid">
@@ -2382,7 +2389,6 @@
                     <input type="text" id="prefix" bind:value={prefix} />
                 </div>
             </div>
-        </section>
 
         <div class="actions">
             <button class="btn-primary main-action" onclick={handleSubmit}>
