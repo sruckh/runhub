@@ -676,7 +676,7 @@ RULES:
       const rhubKleinPayload = {
         nodeInfoList: [
           {
-            nodeId: isUpscaleWorkflow ? "447" : "129",
+            nodeId: isUpscaleWorkflow ? "447" : "132",
             fieldName: "value",
             fieldValue: selectedLora,
             description: "URL of Character LoRA",
