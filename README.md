@@ -1,13 +1,14 @@
 # rhub — RunningHub Precision Control Center
 
-> **Advanced image and video generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation across six backends (FLUX.1-dev, ZImage Upscale, FLUX.2-klein, and Krea2 Kim via RunningHub; Z-Image and FLUX.2-klein via RunPod Serverless), multi-LoRA additive blending, sequential batch queuing, selectable image upscaling via RunningHub or fal.ai Crystal Upscaler with LSB steganography support, image enhancement via fal.ai Phota and RunningHub workflows, video creation via fal.ai Seedance 2.0, and real-time polling.**
+> **Advanced image and video generation control center. Features AI-orchestrated prompt engineering from 300 photogenic locations, multi-model generation across seven backends (FLUX.1-dev, ZImage Upscale, FLUX.2-klein, and Krea2 Kim via RunningHub; Z-Image and FLUX.2-klein via RunPod Serverless; Ideogram4 via fal.ai), multi-LoRA additive blending, sequential batch queuing, selectable image upscaling via RunningHub or fal.ai Crystal Upscaler with LSB steganography support, image enhancement via fal.ai Phota and RunningHub workflows, video creation via fal.ai Seedance 2.0, and real-time polling.**
 
 **rhub** is a specialized SvelteKit-based dashboard that transforms simple subject descriptions into high-quality, LoRA-consistent imagery and video. It solves the "repetition problem" in AI generation by bridging expert prompt engineering (Gemini/Qwen) with multiple synthesis pipelines.
 
 ## Key Features
 
-- **Multi-Model Generation** — Switch between six backends from the Generate tab: **FLUX.2-klein** and **Z-Image** (RunPod Serverless); **FLUX.1-dev**, **FLUX.2-klein (RH)**, **Krea2 Kim**, and **ZImage Upscale** (RunningHub). The same AI prompt engineering pipeline feeds every model.
-- **Multi-LoRA Blending** — Both **Z-Image** and **FLUX.2-klein** support a dynamic LoRA Stack. Load multiple adapters in parallel with per-LoRA strength control and additive blending. A curated preset dropdown is populated from a build-time config file — pick a style or enter any custom URL.
+- **Multi-Model Generation** — Switch between seven backends from the Generate tab: **FLUX.2-klein** and **Z-Image** (RunPod Serverless); **FLUX.1-dev**, **FLUX.2-klein (RH)**, **Krea2 Kim**, and **ZImage Upscale** (RunningHub); **Ideogram4** (fal.ai). A **RunningHub Ideogram4** entry is also listed but is a placeholder (not yet wired up). Each model has its own specialized prompt director.
+- **Multi-LoRA Blending** — **Z-Image**, **FLUX.2-klein**, and **Ideogram4** support a dynamic LoRA Stack (Ideogram4 is capped at 3 adapters by fal.ai). Load multiple adapters in parallel with per-LoRA strength control and additive blending. Z-Image/FLUX.2-klein pull style presets from a build-time config file; **Ideogram4** adds a curated **Character LoRA** dropdown populated at runtime from a filesystem-mounted LoRA directory (`/data/loras/Character/IdeoGram4`), with optional extra LoRAs via the stack.
+- **Ideogram4 Structured-JSON Prompts** — Unlike the other models, Ideogram4 prompts are a structured JSON object (high-level description, aspect ratio, photographic style, and compositional deconstruction). An **"Ideogram Portrait Architect"** system prompt directs Gemini to emit this JSON, which rhub validates, force-syncs `aspect_ratio` to the selected size, and sends to fal.ai. A **Resolution** (1K / 2K / 4K) × **Aspect Ratio** (8 portrait/landscape presets) selector sets the exact pixel dimensions.
 - **Expert Orchestration** — Google Gemini 3 Flash or RunPod Qwen 30B synthesizes detailed prompts via a 2-step process: location selection + AI composition. Each model has a specialized Prompt Director tuned for its strengths.
 - **Z-Image Detail Pipeline** — Z-Image uses selectable spandrel-backed detail upscalers (`nomos_webphoto`, `nomos_webphoto_esrgan`, or `purephoto`) and defaults to an img2img hires-fix pass that upscales first, then lightly re-diffuses to clean super-resolution artifacts.
 - **FLUX.2-klein Support** — 9B-parameter undistilled flow-match transformer by Black Forest Labs, with quality presets, multi-LoRA support, optional detail refinement (2nd pass), and server-side upscaling.
@@ -27,7 +28,7 @@
 
 ![Architecture Diagram](./docs/diagrams/architecture.svg)
 
-The application runs as a single SvelteKit container. API routes handle server-side logic including AI prompt synthesis, S3 uploads, RunningHub interaction, direct RunPod Serverless calls, fal.ai enhancement, and fal.ai video generation. Images and videos are served directly from a Docker-mounted volume to prevent caching issues and ensure persistence.
+The application runs as a single SvelteKit container. API routes handle server-side logic including AI prompt synthesis, S3 uploads, RunningHub interaction, direct RunPod Serverless calls, fal.ai Ideogram4 generation, fal.ai enhancement, and fal.ai video generation. Images and videos are served directly from a Docker-mounted volume to prevent caching issues and ensure persistence.
 
 ## Data Flow
 
@@ -72,6 +73,19 @@ RunningHub also hosts three generation workflows that submit directly to their o
 2. **FLUX.2-klein (RH)** (`rhub-klein`) — Requires a Character LoRA URL (submission is rejected without one). A **Workflow** toggle selects **Standard** (app `2036237857823662082`) or **Upscale** (app `2029780093899378690`); dimensions come from a 6-option aspect-ratio + orientation picker. Both variants return LSB-encoded images, so **Enable TT-Decoder** is forced on automatically.
 3. **Krea2 Kim** (`rhub-krea2-kim`, app `2073899469871075329`) — Uses a fixed, embedded LoRA (no LoRA URL field); only its strength is adjustable. The trigger word `K1mScum` is auto-injected into the prompt if missing. Width/height are derived from an 11-option aspect-ratio dropdown. Output is LSB-encoded, so **Enable TT-Decoder** is forced on automatically.
 
+### Generation Flow — Ideogram4 (fal.ai)
+
+1. User selects **Ideogram4** (FAL), provides subject characteristics, optionally picks a curated **Character LoRA** and adds extra LoRAs, and chooses a **Resolution** (1K/2K/4K) and **Aspect Ratio**.
+2. Tasks are added to the **Persistent Queue**.
+3. Background processor picks the next task:
+   - AI selects a location and generates a composition.
+   - AI synthesizes the prompt using the **Ideogram Portrait Architect** gem — a specialized system prompt that returns a single structured-JSON object (not prose).
+4. rhub strips any markdown fences, `JSON.parse`s the result, forces `aspect_ratio` to the selected ratio (keeps it in sync with `image_size`), and re-stringifies it compactly.
+5. The JSON string is POSTed synchronously to `https://fal.run/ideogram/v4/lora` with fixed parameters (`expansion_model=None`, `rendering_speed=QUALITY`, `acceleration=none`, `enable_safety_checker=false`, `output_format=png`), `image_size` from the selector, and up to 3 `loras` (`{ path, scale }`).
+6. fal.ai returns the result synchronously; the server downloads `images[0].url` and saves it to the output directory. No polling — the frontend marks the task `SUCCESS` immediately.
+
+> **RunningHub Ideogram4** (`rhub-ideogram4`) is listed in the dropdown but is a placeholder: submitting it returns `400 "Ideogram4 on RunningHub is not available yet"` and makes no upstream call.
+
 ### Enhance Flow
 
 1. User opens the **Enhance** tab and selects an engine: **fal.ai Phota**, **RunningHub Enhance**, **RunningHub Enhance+Detail**, or **RunningHub HD Detailer**.
@@ -108,7 +122,7 @@ RunningHub also hosts three generation workflows that submit directly to their o
 - A [Google Gemini API key](https://aistudio.google.com/apikey) or a [RunPod API key](https://www.runpod.io/)
 - A [RunningHub API key](https://www.runninghub.ai/) (required for FLUX.1-dev, ZImage Upscale, FLUX.2-klein (RH), Krea2 Kim, RunningHub Upscaling, and RunningHub Enhance)
 - A [RunPod API key](https://www.runpod.io/) (required for Z-Image, FLUX.2-klein, and Qwen prompt provider)
-- A [fal.ai API key](https://fal.ai/) (required for Enhance via Phota, Create Video, and the Crystal Upscaler upscale engine)
+- A [fal.ai API key](https://fal.ai/) (required for Ideogram4 generation, Enhance via Phota, Create Video, and the Crystal Upscaler upscale engine)
 - **S3-compatible Storage** (Required for Upscaling — both RunningHub engines and fal.ai Crystal Upscaler — and RunningHub Enhance file uploads) — e.g., [Backblaze B2](https://www.backblaze.com/cloud-storage).
 
 ### Run with Docker (Recommended)
@@ -142,7 +156,7 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 | `RUNNINGHUB_API_KEY`         | For RunningHub generation, Upscaling & Enhance  | RunningHub API key                                                  |
 | `GEMINI_API_KEY`             | For Gemini prompt provider                      | Google Gemini API key                                               |
 | `RUNPOD_API_KEY`             | For Z-Image, FLUX.2-klein & Qwen provider       | RunPod API key                                                      |
-| `FAL_KEY`                    | For Enhance (Phota), Create Video & Crystal Upscaler | fal.ai API key                                                 |
+| `FAL_KEY`                    | For Ideogram4 generation, Enhance (Phota), Create Video & Crystal Upscaler | fal.ai API key                                                 |
 | `RUNPOD_ZIMAGE_ENDPOINT`     | For Z-Image                                     | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
 | `RUNPOD_FLUX_KLEIN_ENDPOINT` | For FLUX.2-klein                                | Full RunPod endpoint URL (e.g. `https://api.runpod.ai/v2/<id>`)     |
 | `S3_ENDPOINT`                | For Upscaling (RunningHub & fal.ai) & RunningHub Enhance uploads | S3 API endpoint URL (e.g. `https://s3.us-west-004.backblazeb2.com`) |
@@ -158,12 +172,12 @@ API keys can be set in `.env` (recommended for persistent use) or entered direct
 
 | Setting                | Description                                                                                                  |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| **Generation Model**   | Choose from RunPod Serverless (**FLUX.2-klein**, **Z-Image**) or RunningHub (**FLUX.1-dev**, **FLUX.2-klein (RH)**, **Krea2 Kim**, **ZImage Upscale**) |
+| **Generation Model**   | Choose from RunPod Serverless (**FLUX.2-klein**, **Z-Image**), RunningHub (**FLUX.1-dev**, **FLUX.2-klein (RH)**, **Krea2 Kim**, **ZImage Upscale**, plus an inert **Ideogram4** placeholder), or FAL (**Ideogram4**) |
 | **AI Prompt Provider** | Choose between Google Gemini or RunPod (Qwen 30B) for prompt engineering                                     |
 | **RunningHub API Key** | Overrides `RUNNINGHUB_API_KEY` env var for this session                                                      |
 | **Gemini API Key**     | Overrides `GEMINI_API_KEY` env var for this session                                                          |
 | **RunPod API Key**     | Overrides `RUNPOD_API_KEY` env var for this session                                                          |
-| **fal.ai API Key**     | Overrides `FAL_KEY` env var for this session (used by Enhance and Create Video)                              |
+| **fal.ai API Key**     | Overrides `FAL_KEY` env var for this session (used by Ideogram4 generation, Enhance, Create Video, and the Crystal Upscaler)                              |
 | **Upscale Engine**     | Choose **RunningHub — 2K Upscale**, **RunningHub — API Upscale**, or **FAL — Crystal Upscaler** for tasks added from the Upscale tab |
 | **Enable TT-Decoder**  | Toggle LSB steganography decoding/encoding for supported RunningHub generation and upscale workflows          |
 
@@ -248,6 +262,17 @@ Output is LSB-encoded; **Enable TT-Decoder** is forced on automatically for this
 
 Output is LSB-encoded; **Enable TT-Decoder** is forced on automatically for this model.
 
+#### FAL Ideogram4
+
+| Parameter        | Default        | Description                                                                                                                                                    |
+| ---------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolution       | `1K`           | `1K (native)`, `2K (native, max)`, or `4K (upscaled)`. Selects exact pixel dimensions sent as fal's `image_size`.                                              |
+| Aspect Ratio     | `4:5 Portrait` | 8 oriented presets (4:5, 5:4, 16:9, 9:16, 4:3, 3:4, 1.91:1, 1:1.91). Each has 1K/2K/4K W×H values; the ratio string is also forced into the JSON prompt's `aspect_ratio`. |
+| Character LoRA   | —              | Optional curated LoRA (from `/data/loras/Character/IdeoGram4`) or a custom URL + trigger word + strength.                                                      |
+| Additional LoRAs | none           | Optional extra LoRAs via the LoRA Stack (URL + trigger + scale each). Merged with the Character LoRA; fal caps the combined list at 3.                         |
+
+`expansion_model`, `rendering_speed`, `acceleration`, `enable_safety_checker`, and `output_format` are fixed (`None`, `QUALITY`, `none`, `false`, `png`) and are not exposed in the UI.
+
 #### Create Video (fal.ai Seedance 2.0)
 
 | Parameter           | Default       | Description                                                                          |
@@ -279,6 +304,8 @@ Submits an image generation job. Handles AI prompt engineering via Gemini or Run
 - **ZImage Upscale (RunningHub)**: Submits to RunningHub app `2027454454034862082` with width/height/seed/LoRA/style nodes. Returns `{ taskId, model: 'rhub-zimage', prompt }`.
 - **FLUX.2-klein (RH)**: Requires a Character LoRA URL. Submits to RunningHub app `2036237857823662082` (Standard) or `2029780093899378690` (Upscale) depending on the selected Workflow. Returns `{ taskId, model: 'rhub-klein', prompt }`.
 - **Krea2 Kim**: Fixed-LoRA RunningHub workflow; auto-injects the `K1mScum` trigger word. Submits to RunningHub app `2073899469871075329` with prompt/LoRA-strength/width/height nodes. Returns `{ taskId, model: 'rhub-krea2-kim', prompt }`.
+- **Ideogram4 (fal.ai)**: Synthesizes a structured-JSON prompt via the "Ideogram Portrait Architect" gem, then POSTs **synchronously** to `https://fal.run/ideogram/v4/lora` (`Authorization: Key`) with fixed params (`expansion_model=None`, `rendering_speed=QUALITY`, `acceleration=none`, `enable_safety_checker=false`, `output_format=png`), `image_size`, and up to 3 `loras` of shape `{ path, scale }`. Downloads + saves `images[0].url`. Returns `{ model: 'fal-ideogram4', filename, prompt }` — no polling.
+- **Ideogram4 (RunningHub)**: Placeholder — returns `400 { error: "Ideogram4 on RunningHub is not available yet" }` and makes no upstream call.
 
 ### `POST /api/zimage-check`
 
@@ -320,6 +347,8 @@ rhub/
 │   ├── lib/
 │   │   ├── loras-klein.json          # FLUX.2-klein LoRA preset list (generated by generate-loras.sh)
 │   │   ├── loras-zimage.json         # Z-Image LoRA preset list (generated by generate-loras.sh)
+│   │   ├── character-lora-triggers.json # Character LoRA trigger-word config (subdir→name→triggers)
+│   │   ├── ideogram4-system-prompt.md   # Ideogram4 "Portrait Architect" structured-JSON system prompt (?raw import)
 │   │   ├── tt-decoder.ts             # LSB Steganography extraction
 │   │   ├── tt-encoder.ts             # LSB Steganography embedding
 │   │   ├── s3.ts                     # S3 Client & Presigned URL logic
@@ -332,6 +361,7 @@ rhub/
 │       ├── logout/                   # GET /logout — clears session cookie
 │       └── api/
 │           ├── generate/             # AI Synthesis + Multi-model Submission
+│           ├── lora-character/       # GET — lists Character LoRAs from /data/loras/Character (model→subdir)
 │           ├── zimage-check/         # RunPod job polling + image download (Z-Image & FLUX.2-klein)
 │           ├── upscale/              # Upload + Encoding + S3 Hosting
 │           ├── check/                # RunningHub task polling + TT-Decode
@@ -364,7 +394,7 @@ The script scans:
 - **Frontend**: Svelte 5 (Runes), TypeScript, SvelteKit
 - **Backend**: Node.js, AWS SDK (S3), pngjs
 - **AI**: Gemini 3 Flash / RunPod Qwen 30B
-- **Image Generation**: FLUX.1-dev / ZImage Upscale / FLUX.2-klein (RH) / Krea2 Kim (RunningHub) / Z-Image / FLUX.2-klein (RunPod Serverless)
+- **Image Generation**: FLUX.1-dev / ZImage Upscale / FLUX.2-klein (RH) / Krea2 Kim (RunningHub) / Z-Image / FLUX.2-klein (RunPod Serverless) / Ideogram4 (fal.ai)
 - **Image Upscaling**: RunningHub (2K Upscale / API Upscale) / fal.ai Crystal Upscaler
 - **Image Enhancement**: fal.ai Phota / RunningHub Enhance workflows
 - **Video Generation**: fal.ai Seedance 2.0 (`bytedance/seedance-2.0/reference-to-video`)
