@@ -222,7 +222,10 @@ Subject: ${effectiveLoraKeyword ? `${effectiveLoraKeyword} — ` : ""}${subject}
       let finalSystemPrompt = "";
       let finalUserMessage = "";
 
-      if (model === "flux-klein") {
+      // rhub-klein is FLUX.2-klein running on RunningHub (the same base model as
+      // the RunPod flux-klein path), so it uses the same specialized FLUX.2-klein
+      // director rather than falling through to the generic FLUX.1-dev prompt.
+      if (model === "flux-klein" || model === "rhub-klein") {
         finalSystemPrompt = `You are **FLUX Prompt Director** — a specialized prompt-refinement assistant for **FLUX.2 [klein] 9B**.
 
 ## Mission
@@ -420,7 +423,7 @@ RULES:
       } else {
         let promptMatch: RegExpMatchArray | null = null;
 
-        if (model === "flux-klein") {
+        if (model === "flux-klein" || model === "rhub-klein") {
           promptMatch = responseText.match(/OPTIMIZED PROMPT:\s*(.*)/is);
         } else if (model === "z-image" || model === "rhub-zimage") {
           promptMatch = responseText.match(/\*\*The Optimized Prompt\*\*:\s*(.*)/is);
