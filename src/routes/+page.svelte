@@ -124,14 +124,25 @@
         kleinLoras = [...kleinLoras, _defaultLora(list)];
     }
     function removeKleinLora(i: number) {
-        if (kleinLoras.length > 1) kleinLoras = kleinLoras.filter((_, idx) => idx !== i);
+        // Ideogram4 extras are optional (removable down to zero); other
+        // multi-LoRA models keep at least one stack entry.
+        if (model === 'fal-ideogram4') {
+            kleinLoras = kleinLoras.filter((_, idx) => idx !== i);
+        } else if (kleinLoras.length > 1) {
+            kleinLoras = kleinLoras.filter((_, idx) => idx !== i);
+        }
     }
 
     // Reset LoRA stack when switching between models with different LoRA lists
     let _prevLoraModel = untrack(() => model);
     $effect(() => {
         const m = model;
-        if ((m === 'flux-klein' || m === 'z-image') && m !== _prevLoraModel) {
+        if (m === _prevLoraModel) {
+            // no model change — nothing to reset
+        } else if (m === 'fal-ideogram4') {
+            // Character LoRA is the primary; extra LoRAs are optional, start empty.
+            kleinLoras = [];
+        } else if (m === 'flux-klein' || m === 'z-image') {
             kleinLoras = [{ url: '', keyword: '', scale: 0.85, preset: '' }];
         }
         _prevLoraModel = m;
@@ -201,6 +212,27 @@
         { ratio: '9:16', width: 576, height: 1024 },
         { ratio: '21:9', width: 448, height: 1024 },
     ];
+
+    // FAL Ideogram4 resolution tiers × aspect ratios (portrait + landscape).
+    // 1K/2K are native; 4K is the upscaled tier.
+    let ideogramResolution = $state('1k'); // '1k' | '2k' | '4k'
+    let ideogramAspectRatio = $state('4:5-portrait');
+    const ideogramAspectRatios = [
+        { id: '4:5-portrait',     label: '4:5 Portrait (Instagram)',      sizes: { '1k': { w: 832,  h: 1040 }, '2k': { w: 1600, h: 2000 }, '4k': { w: 3200, h: 4000 } } },
+        { id: '5:4-landscape',    label: '5:4 Landscape',                  sizes: { '1k': { w: 1040, h: 832  }, '2k': { w: 2000, h: 1600 }, '4k': { w: 4000, h: 3200 } } },
+        { id: '16:9-landscape',   label: '16:9 Landscape (Wallpaper)',     sizes: { '1k': { w: 1024, h: 576  }, '2k': { w: 2048, h: 1152 }, '4k': { w: 4096, h: 2304 } } },
+        { id: '9:16-portrait',    label: '9:16 Portrait (Lock Screen)',    sizes: { '1k': { w: 576,  h: 1024 }, '2k': { w: 1152, h: 2048 }, '4k': { w: 2304, h: 4096 } } },
+        { id: '4:3-landscape',    label: '4:3 Landscape (Photo/Print)',    sizes: { '1k': { w: 1024, h: 768  }, '2k': { w: 2048, h: 1536 }, '4k': { w: 4096, h: 3072 } } },
+        { id: '3:4-portrait',     label: '3:4 Portrait',                   sizes: { '1k': { w: 768,  h: 1024 }, '2k': { w: 1536, h: 2048 }, '4k': { w: 3072, h: 4096 } } },
+        { id: '1.91:1-landscape', label: '1.91:1 Landscape (FB/LinkedIn)', sizes: { '1k': { w: 1008, h: 528  }, '2k': { w: 2016, h: 1056 }, '4k': { w: 4032, h: 2112 } } },
+        { id: '1:1.91-portrait',  label: '1:1.91 Portrait',                sizes: { '1k': { w: 528,  h: 1008 }, '2k': { w: 1056, h: 2016 }, '4k': { w: 2112, h: 4032 } } },
+    ];
+    function ideogramDims() {
+        const ar = ideogramAspectRatios.find((a) => a.id === ideogramAspectRatio) ?? ideogramAspectRatios[0];
+        const tier = ideogramResolution === '2k' || ideogramResolution === '4k' ? ideogramResolution : '1k';
+        const s = ar.sizes[tier];
+        return { width: s.w, height: s.h };
+    }
 
     // Load persisted settings
     const savedTtDecoder = typeof localStorage !== 'undefined' && localStorage.getItem('useTtDecoder') === 'true';
@@ -433,7 +465,7 @@
 
         // For multi-LoRA models, prepend the Character LoRA as its own stack entry,
         // leaving the Style LoRA stack (kleinLoras) untouched.
-        const isMultiLora = model === 'flux-klein' || model === 'z-image';
+        const isMultiLora = model === 'flux-klein' || model === 'z-image' || model === 'fal-ideogram4';
         const charEntry = hasCharLora
             ? { url: charUrl, keyword: charKeyword, scale: charScale, preset: '' }
             : null;
@@ -515,6 +547,9 @@
             rhub_klein_orientation: rhubKleinOrientation,
             kim_lora_strength: kimLoraStrength,
             kim_aspect_ratio: kimAspectRatio,
+            ideogram_width: ideogramDims().width,
+            ideogram_height: ideogramDims().height,
+            ideogram_aspect_ratio: ideogramAspectRatio.split('-')[0],
             createdAt: new Date().toISOString()
         };
 
@@ -1531,14 +1566,14 @@
                     </div>
                 {/if}
 
-                {#if model === 'flux-klein' || model === 'z-image'}
+                {#if model === 'flux-klein' || model === 'z-image' || model === 'fal-ideogram4'}
                     <div class="multi-lora-section">
                         <div class="multi-lora-header">
-                            <span class="multi-lora-label">LoRA Stack</span>
+                            <span class="multi-lora-label">{model === 'fal-ideogram4' ? 'Additional LoRAs' : 'LoRA Stack'}</span>
                             <button type="button" class="add-lora-btn" onclick={addKleinLora}>+ Add LoRA</button>
                         </div>
                         {#each kleinLoras as lora, i}
-                            {@const loraList = model === 'z-image' ? lorasZimage : lorasKlein}
+                            {@const loraList = model === 'z-image' ? lorasZimage : model === 'fal-ideogram4' ? [] : lorasKlein}
                             <div class="lora-entry">
                                 <div class="lora-entry-fields">
                                     {#if loraList.length > 0}
@@ -1571,7 +1606,7 @@
                                         <input type="number" id="kleinLoraScale_{i}" bind:value={lora.scale} min="0" max="2" step="0.05" />
                                     </div>
                                 </div>
-                                {#if kleinLoras.length > 1}
+                                {#if kleinLoras.length > 1 || model === 'fal-ideogram4'}
                                     <button type="button" class="remove-lora-btn" onclick={() => removeKleinLora(i)}>×</button>
                                 {/if}
                             </div>
@@ -1719,6 +1754,33 @@
                         </select>
                     </div>
                     <p class="toggle-description">Fixed LoRA (K1mScum). The trigger word is added to every prompt automatically; results are TT-decoded before saving.</p>
+                {/if}
+
+                {#if model === 'fal-ideogram4'}
+                    <div class="field">
+                        <label for="ideogramResolution">Resolution</label>
+                        <select id="ideogramResolution" bind:value={ideogramResolution}>
+                            <option value="1k">1K (native)</option>
+                            <option value="2k">2K (native, max)</option>
+                            <option value="4k">4K (upscaled)</option>
+                        </select>
+                    </div>
+                    <div class="grid">
+                        <div class="field">
+                            <label for="ideogramAspectRatio">Aspect Ratio</label>
+                            <select id="ideogramAspectRatio" bind:value={ideogramAspectRatio}>
+                                {#each ideogramAspectRatios as ar}
+                                    <option value={ar.id}>{ar.label}</option>
+                                {/each}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Dimensions</span>
+                            <div class="orient-row">
+                                <span class="dim-preview">{ideogramDims().width} × {ideogramDims().height}</span>
+                            </div>
+                        </div>
+                    </div>
                 {/if}
 
                 {#if model === 'rhub-klein'}

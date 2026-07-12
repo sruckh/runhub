@@ -5,6 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getNextLocation } from "$lib/locations";
 import fs from "fs/promises";
 import path from "path";
+import ideogram4SystemPrompt from "$lib/ideogram4-system-prompt.md?raw";
 
 const RUNPOD_ZIMAGE_ENDPOINT_DEFAULT = "https://api.runpod.ai/v2/j7rrb3raom3lzh";
 const RUNPOD_FLUX_KLEIN_ENDPOINT_DEFAULT = "https://api.runpod.ai/v2/639jlguymlblim";
@@ -87,6 +88,10 @@ export const POST: RequestHandler = async ({ request }) => {
     // RunningHub Krea2 Kim params (fixed LoRA; trigger K1mScum is forced below)
     kim_lora_strength = 1,
     kim_aspect_ratio = "1:1 (Square)",
+    // FAL Ideogram4 explicit dimensions (1K/2K/4K tiers, portrait + landscape)
+    ideogram_width = 1024,
+    ideogram_height = 1024,
+    ideogram_aspect_ratio = "4:5",
   } = await request.json();
 
   // Resolve keys: user input overrides env vars
@@ -372,6 +377,13 @@ When the user gives a concept, generate a prompt using this 4-Layer framework:
 1. **The Optimized Prompt**: A single block of text ready for copy-pasting.`;
 
         finalUserMessage = `Concept: ${effectiveLoraKeyword ? `${effectiveLoraKeyword} — ` : ""}${subject}\nLocation: ${location}\nComposition: ${compositionPrompt}\n\nGenerate the optimized prompt.`;
+      } else if (model === "fal-ideogram4") {
+        // Ideogram4 uses a structured-JSON prompt unlike any other model. The
+        // system prompt (the "Ideogram Portrait Architect" gem) is loaded
+        // verbatim; the user message carries the subject, composition, and the
+        // required aspect_ratio (driven by the UI selector).
+        finalSystemPrompt = ideogram4SystemPrompt;
+        finalUserMessage = `Subject: ${effectiveLoraKeyword ? `${effectiveLoraKeyword} — ` : ""}${subject}\nComposition direction: ${compositionPrompt}\nRequired aspect_ratio: "${ideogram_aspect_ratio}" — use this exact value in the aspect_ratio field.\n\nGenerate the Ideogram 4 JSON prompt.`;
       } else {
         // Original Generic FLUX Prompt used for flux-dev
         finalSystemPrompt = `You are an expert FLUX.1-dev prompt engineer.
@@ -389,17 +401,35 @@ RULES:
 
       const responseText = await askAI(finalSystemPrompt, finalUserMessage, 1.0);
 
-      let promptMatch: RegExpMatchArray | null = null;
-
-      if (model === "flux-klein") {
-        promptMatch = responseText.match(/OPTIMIZED PROMPT:\s*(.*)/is);
-      } else if (model === "z-image" || model === "rhub-zimage") {
-        promptMatch = responseText.match(/\*\*The Optimized Prompt\*\*:\s*(.*)/is);
+      if (model === "fal-ideogram4") {
+        // The Ideogram4 helper returns a single JSON object. Strip any stray
+        // markdown fences, validate it, force aspect_ratio to the UI selection
+        // (keeps it in sync with image_size), and re-stringify compactly.
+        const cleaned = responseText
+          .replace(/^\s*```(?:json)?\s*/i, "")
+          .replace(/\s*```\s*$/i, "")
+          .trim();
+        let parsed: Record<string, unknown>;
+        try {
+          parsed = JSON.parse(cleaned);
+        } catch {
+          throw new Error("Ideogram4 prompt helper did not return valid JSON.");
+        }
+        if (ideogram_aspect_ratio) parsed.aspect_ratio = ideogram_aspect_ratio;
+        finalPrompt = JSON.stringify(parsed);
       } else {
-        promptMatch = responseText.match(/PROMPT:\s*(.*)/is);
-      }
+        let promptMatch: RegExpMatchArray | null = null;
 
-      finalPrompt = promptMatch ? promptMatch[1].trim() : responseText.trim();
+        if (model === "flux-klein") {
+          promptMatch = responseText.match(/OPTIMIZED PROMPT:\s*(.*)/is);
+        } else if (model === "z-image" || model === "rhub-zimage") {
+          promptMatch = responseText.match(/\*\*The Optimized Prompt\*\*:\s*(.*)/is);
+        } else {
+          promptMatch = responseText.match(/PROMPT:\s*(.*)/is);
+        }
+
+        finalPrompt = promptMatch ? promptMatch[1].trim() : responseText.trim();
+      }
     }
 
     // ── Z-Image via RunPod Serverless ──────────────────────────────────────
@@ -711,18 +741,15 @@ RULES:
 
     // ── Ideogram4 via fal.ai (synchronous fal.run call) ────────────────────
     if (model === "fal-ideogram4") {
-      // fal's LoRAInput uses `path` (the weights URL) + `scale`. Only send a
-      // loras entry when a Character LoRA URL is present.
-      const ideogramLoraUrl = typeof loraUrl === "string" ? loraUrl.trim() : "";
-      const ideogramLoraScale =
-        typeof loraScale === "number" && Number.isFinite(loraScale) ? loraScale : 0.85;
-      const ideogramLoras = ideogramLoraUrl
-        ? [{ path: ideogramLoraUrl, scale: ideogramLoraScale }]
-        : [];
+      // fal's LoRAInput uses `path` (the weights URL) + `scale`. The Character
+      // LoRA (if selected) plus any extra stack LoRAs arrive merged in
+      // normalizedKleinLoras; fal caps at 3 LoRAs total.
+      const ideogramLoras = normalizedKleinLoras
+        .filter((l) => l.url)
+        .map((l) => ({ path: l.url, scale: l.scale }))
+        .slice(0, 3);
 
-      console.log(
-        `[FAL-Ideogram4] Submitting loras=${ideogramLoras.length} scale=${ideogramLoraScale}`,
-      );
+      console.log(`[FAL-Ideogram4] Submitting loras=${ideogramLoras.length}`);
       console.log(`[FAL-Ideogram4] Prompt (first 80): ${finalPrompt.substring(0, 80)}`);
 
       const ideogramResponse = await fetch("https://fal.run/ideogram/v4/lora", {
@@ -733,6 +760,10 @@ RULES:
         },
         body: JSON.stringify({
           prompt: finalPrompt,
+          image_size: {
+            width: Number(ideogram_width) || 1024,
+            height: Number(ideogram_height) || 1024,
+          },
           loras: ideogramLoras,
           expansion_model: "None",
           rendering_speed: "QUALITY",
